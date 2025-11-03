@@ -1,0 +1,555 @@
+/* Professional.css - NIVEL BANCARIO CORPORATIVO */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* Paleta Corporativa Bancaria Premium */
+  --primary-navy: #0f1729;
+  --primary-blue: #1e40af;
+  --dark-blue: #1e3a8a;
+  --light-blue: #3b82f6;
+  --accent-gold: #fbbf24;
+  --accent-emerald: #10b981;
+  --warning-amber: #f59e0b;
+  --danger-red: #dc2626;
+  --neutral-50: #f8fafc;
+  --neutral-100: #f1f5f9;
+  --neutral-200: #e2e8f0;
+  --neutral-300: #cbd5e1;
+  --neutral-400: #94a3b8;
+  --neutral-500: #64748b;
+  --neutral-600: #475569;
+  --neutral-700: #334155;
+  --neutral-800: #1e293b;
+  --neutral-900: #0f172a;
+  --white: #ffffff;
+  
+  /* Gradientes Premium */
+  --gradient-primary: linear-gradient(135deg, #1e40af 0%, #3b82f6 50%, #60a5fa 100%);
+  --gradient-success: linear-gradient(135deg, #059669 0%, #10b981 50%, #34d399 100%);
+  --gradient-warning: linear-gradient(135deg, #d97706 0%, #f59e0b 50%, #fbbf24 100%);
+  --gradient-danger: linear-gradient(135deg, #b91c1c 0%, #dc2626 50%, #f87171 100%);
+  --gradient-dark: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+  
+  /* Sombras Premium */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.1), 0 8px 10px -6px rgb(0 0 0 / 0.1);
+  --shadow-2xl: 0 25px 50px -12px rgb(0 0 0 / 0.25);
+  --shadow-inner: inset 0 2px 4px 0 rgb(0 0 0 / 0.05);
+  
+  /* Bordes */
+  --radius-xs: 0.125rem;
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-3xl: 2rem;
+}
+
+/* Reset y base premium */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, system-ui, sans-serif;
+  background: linear-gradient(135deg, var(--neutral-50) 0%, var(--neutral-100) 100%);
+  color: var(--neutral-800);
+  line-height: 1.6;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Background pattern corporativo */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-image: 
+    radial-gradient(circle at 25% 25%, var(--neutral-100) 0%, transparent 50%),
+    radial-gradient(circle at 75% 75%, var(--neutral-200) 0%, transparent 50%);
+  z-index: -2;
+  opacity: 0.4;
+}
+
+/* Navbar Premium */
+.navbar-professional {
+  background: var(--gradient-dark);
+  backdrop-filter: blur(20px);
+  box-shadow: var(--shadow-xl);
+  border: none;
+  padding: 1.25rem 0;
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+}
+
+.navbar-professional .navbar-brand {
+  font-weight: 800;
+  font-size: 1.75rem;
+  color: var(--white) !important;
+  text-shadow: 0 2px 8px rgba(0,0,0,0.4);
+  letter-spacing: -0.025em;
+}
+
+.navbar-professional .btn-outline-light {
+  border: 2px solid rgba(255,255,255,0.8);
+  color: var(--white);
+  font-weight: 600;
+  padding: 0.75rem 2rem;
+  border-radius: var(--radius-xl);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  backdrop-filter: blur(10px);
+  font-size: 0.9rem;
+  letter-spacing: 0.025em;
+}
+
+.navbar-professional .btn-outline-light:hover {
+  background: var(--white);
+  color: var(--primary-blue);
+  transform: translateY(-2px) scale(1.02);
+  box-shadow: var(--shadow-lg);
+  border-color: var(--white);
+}
+
+/* Cards Premium */
+.card-professional {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-xl);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  overflow: hidden;
+  position: relative;
+}
+
+.card-professional::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--gradient-primary);
+  opacity: 0.6;
+}
+
+.card-professional:hover {
+  transform: translateY(-8px) scale(1.01);
+  box-shadow: var(--shadow-2xl);
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.card-professional .card-header {
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.8) 0%, rgba(255, 255, 255, 0.9) 100%);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  padding: 2rem 2.5rem 1.5rem;
+  font-weight: 700;
+  color: var(--neutral-800);
+  font-size: 1.1rem;
+  letter-spacing: -0.025em;
+}
+
+.card-professional .card-body {
+  padding: 2.5rem;
+}
+
+/* KPI Cards Premium */
+.kpi-card {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: var(--radius-2xl);
+  box-shadow: var(--shadow-lg);
+  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative;
+  overflow: hidden;
+}
+
+.kpi-card::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 6px;
+  background: var(--gradient-primary);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.kpi-card:hover::before {
+  transform: scaleX(1);
+}
+
+.kpi-card:hover {
+  transform: translateY(-12px) scale(1.02);
+  box-shadow: var(--shadow-2xl);
+}
+
+.kpi-card.primary::before {
+  background: var(--gradient-primary);
+}
+
+.kpi-card.danger::before {
+  background: var(--gradient-danger);
+}
+
+.kpi-card.success::before {
+  background: var(--gradient-success);
+}
+
+.kpi-card.warning::before {
+  background: var(--gradient-warning);
+}
+
+.kpi-card .card-body {
+  padding: 3rem 2.5rem;
+  text-align: center;
+  position: relative;
+}
+
+.kpi-card h5 {
+  color: var(--neutral-600);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 1rem;
+}
+
+.kpi-card h2 {
+  color: var(--neutral-900);
+  font-size: 3rem;
+  font-weight: 800;
+  line-height: 1;
+  margin: 0;
+  letter-spacing: -0.05em;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+/* Iconos de las KPI cards */
+.kpi-icon {
+  position: absolute;
+  top: 1.5rem;
+  right: 1.5rem;
+  width: 3rem;
+  height: 3rem;
+  opacity: 0.1;
+  font-size: 2rem;
+}
+
+/* Login Premium */
+.login-container {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--gradient-dark);
+  position: relative;
+  overflow: hidden;
+}
+
+.login-container::before {
+  content: '';
+  position: absolute;
+  width: 200%;
+  height: 200%;
+  background-image: 
+    radial-gradient(circle at 20% 80%, rgba(59, 130, 246, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 80% 20%, rgba(16, 185, 129, 0.2) 0%, transparent 50%),
+    radial-gradient(circle at 40% 40%, rgba(251, 191, 36, 0.1) 0%, transparent 50%);
+  animation: float 20s ease-in-out infinite;
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-20px) rotate(1deg); }
+}
+
+.login-card {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--radius-3xl);
+  box-shadow: var(--shadow-2xl);
+  overflow: hidden;
+  min-width: 480px;
+  position: relative;
+  z-index: 10;
+}
+
+.login-header {
+  background: linear-gradient(135deg, rgba(248, 250, 252, 0.8), rgba(255, 255, 255, 0.9));
+  padding: 3rem 3rem 2rem;
+  text-align: center;
+  position: relative;
+}
+
+.login-header h3 {
+  color: var(--neutral-800);
+  font-weight: 800;
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  letter-spacing: -0.025em;
+}
+
+.login-header p {
+  font-size: 0.95rem;
+  color: var(--neutral-600);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.login-body {
+  padding: 2rem 3rem 3rem;
+}
+
+/* Botones Premium */
+.btn-professional {
+  font-weight: 600;
+  border-radius: var(--radius-xl);
+  padding: 1rem 2rem;
+  border: none;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  text-transform: none;
+  letter-spacing: 0.025em;
+  font-size: 1rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.btn-professional::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+  transition: left 0.5s;
+}
+
+.btn-professional:hover::before {
+  left: 100%;
+}
+
+.btn-professional.btn-primary {
+  background: var(--gradient-primary);
+  color: var(--white);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-professional.btn-primary:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: var(--shadow-xl);
+}
+
+.btn-professional.btn-success {
+  background: var(--gradient-success);
+  color: var(--white);
+  box-shadow: var(--shadow-md);
+}
+
+.btn-professional.btn-success:hover {
+  transform: translateY(-3px) scale(1.02);
+  box-shadow: var(--shadow-xl);
+}
+
+/* Tabla Premium */
+.table-professional {
+  background: rgba(255, 255, 255, 0.98);
+  backdrop-filter: blur(20px);
+  border-radius: var(--radius-2xl);
+  overflow: hidden;
+  box-shadow: var(--shadow-lg);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.table-professional thead {
+  background: var(--gradient-dark);
+}
+
+.table-professional th {
+  font-weight: 700;
+  color: var(--white);
+  text-transform: uppercase;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  padding: 1.5rem 2rem;
+  border: none;
+}
+
+.table-professional td {
+  padding: 1.5rem 2rem;
+  border: none;
+  border-bottom: 1px solid rgba(226, 232, 240, 0.6);
+  vertical-align: middle;
+  font-weight: 500;
+}
+
+.table-professional tbody tr {
+  transition: all 0.2s ease;
+}
+
+.table-professional tbody tr:hover {
+  background: rgba(59, 130, 246, 0.05);
+  transform: scale(1.005);
+}
+
+/* Badges Premium */
+.badge-professional {
+  font-weight: 600;
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius-lg);
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(10px);
+}
+
+.badge-professional.bg-primary {
+  background: var(--gradient-primary) !important;
+  color: var(--white);
+  box-shadow: var(--shadow-sm);
+}
+
+.badge-professional.bg-danger {
+  background: var(--gradient-danger) !important;
+  color: var(--white);
+  box-shadow: var(--shadow-sm);
+}
+
+.badge-professional.bg-success {
+  background: var(--gradient-success) !important;
+  color: var(--white);
+  box-shadow: var(--shadow-sm);
+}
+
+.badge-professional.bg-warning {
+  background: var(--gradient-warning) !important;
+  color: var(--white);
+  box-shadow: var(--shadow-sm);
+}
+
+.badge-professional.bg-info {
+  background: linear-gradient(135deg, #0891b2, #06b6d4) !important;
+  color: var(--white);
+  box-shadow: var(--shadow-sm);
+}
+
+/* Animaciones Premium */
+.fade-in {
+  animation: fadeInUp 0.6s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* Stats cards con iconos */
+.stats-icon {
+  width: 4rem;
+  height: 4rem;
+  border-radius: var(--radius-xl);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 2rem;
+  margin-bottom: 1rem;
+  box-shadow: var(--shadow-md);
+}
+
+.stats-icon.primary {
+  background: var(--gradient-primary);
+  color: var(--white);
+}
+
+.stats-icon.danger {
+  background: var(--gradient-danger);
+  color: var(--white);
+}
+
+.stats-icon.success {
+  background: var(--gradient-success);
+  color: var(--white);
+}
+
+.stats-icon.warning {
+  background: var(--gradient-warning);
+  color: var(--white);
+}
+
+/* Responsive Premium */
+@media (max-width: 768px) {
+  .login-card {
+    min-width: 90vw;
+    margin: 1rem;
+  }
+  
+  .kpi-card h2 {
+    font-size: 2.5rem;
+  }
+  
+  .navbar-professional .navbar-brand {
+    font-size: 1.5rem;
+  }
+  
+  .card-professional .card-header,
+  .card-professional .card-body {
+    padding: 1.5rem;
+  }
+}
+
+/* Scrollbar Premium */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--neutral-100);
+  border-radius: var(--radius-lg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--gradient-primary);
+  border-radius: var(--radius-lg);
+  border: 2px solid var(--neutral-100);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--gradient-dark);
+}
+
+/* Loading states */
+.loading-shimmer {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}

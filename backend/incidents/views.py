@@ -73,3 +73,49 @@ def get_incidents(request):
         {"id": 3, "threat_type": "ACCESO_ANÓMALO", "criticality": "MEDIO", "resolved": False, "created_at": "2024-11-02T21:00:00Z", "confidence_score": 0.75},
     ]
     return JsonResponse(fake_incidents, safe=False)
+@csrf_exempt
+def get_dashboard_stats(request):
+    """API para estadísticas del dashboard administrativo"""
+    stats = {
+        "total_incidents": 47,
+        "critical_incidents": 8,
+        "resolved_incidents": 32,
+        "pending_incidents": 15,
+        "incidents_by_type": {
+            "PHISHING": 18,
+            "MALWARE": 12,
+            "INGENIERÍA_SOCIAL": 8,
+            "RANSOMWARE": 5,
+            "ACCESO_ANÓMALO": 3,
+            "OTRO": 1
+        },
+        "incidents_by_month": [
+            {"month": "Ago", "count": 12},
+            {"month": "Sep", "count": 18},
+            {"month": "Oct", "count": 17},
+        ],
+        "recent_activity": [
+            {"id": 47, "type": "PHISHING", "date": "2024-11-03", "status": "PENDIENTE"},
+            {"id": 46, "type": "MALWARE", "date": "2024-11-02", "status": "RESUELTO"},
+            {"id": 45, "type": "INGENIERÍA_SOCIAL", "date": "2024-11-02", "status": "INVESTIGANDO"},
+        ]
+    }
+    return JsonResponse(stats)
+
+@csrf_exempt
+def update_incident_status(request):
+    """API para actualizar estado de incidentes"""
+    if request.method == 'POST':
+        data = json.loads(request.body)
+        incident_id = data.get('incident_id')
+        new_status = data.get('status')
+        
+        # Simulamos actualización exitosa
+        return JsonResponse({
+            "success": True,
+            "message": f"Incidente {incident_id} actualizado a {new_status}",
+            "incident_id": incident_id,
+            "status": new_status
+        })
+    
+    return JsonResponse({"error": "Método no permitido"}, status=405)
