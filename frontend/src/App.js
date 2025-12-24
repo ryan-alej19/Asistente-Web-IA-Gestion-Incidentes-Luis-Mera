@@ -31,57 +31,115 @@ ChartJS.register(
 );
 
 function App() {
+  const API_BASE = 'http://127.0.0.1:8000/api';
   const [currentView, setCurrentView] = useState('login');
-  const [userRole, setUserRole] = useState('');
   const [incidents, setIncidents] = useState([]);
   const [dashboardStats, setDashboardStats] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  // ===== CARGA DE DATOS =====
+  
+  // Cargar incidentes REALES desde BD
+  const loadIncidents = async () => {
+    try {
+      const response = await axios.get(`${API_BASE}/incidents/`);
+      console.log('Incidentes cargados de BD:', response.data);
+      setIncidents(response.data);
+      setError(null);
+    } catch (error) {
+      console.error('Error cargando incidentes:', error);
+      setError('Error al cargar incidentes');
+      setIncidents([]);
+    }
+  };
+
+  // Cargar estadísticas REALES desde BD
+  const loadDashboardData = async () => {
+    try {
+      const response = await axios.get(`${API_BASE}/incidents/stats/`);
+      console.log('Estadísticas cargadas de BD:', response.data);
+      setDashboardStats(response.data);
+      setError(null);
+    } catch (error) {
+      console.error('Error cargando dashboard:', error);
+      setError('Error al cargar estadísticas');
+    }
+  };
 
   // Función login
   const handleLogin = (email, role) => {
-    setUserRole(role);
     if (role === 'admin') {
       setCurrentView('admin');
       loadDashboardData();
+      loadIncidents();
     } else {
       setCurrentView('employee');
-    }
-    loadIncidents();
-  };
-
-  // Cargar datos del dashboard
-  const loadDashboardData = async () => {
-    try {
-      const response = await axios.get('http://localhost:8000/api/dashboard/stats/');
-      setDashboardStats(response.data);
-    } catch (error) {
-      console.error('Error cargando dashboard:', error);
+      loadIncidents();
     }
   };
 
-  // Cargar incidentes
-  const loadIncidents = async () => {
-    try {
-      const response = await axios.get('http://localhost:8000/api/incidents/');
-      setIncidents(response.data);
-    } catch (error) {
-      console.error('Error cargando incidentes:', error);
-    }
-  };
-
-  // Análisis IA
-  const analyzeIncident = async (description) => {
+  // ===== CREAR INCIDENTE =====
+  const createIncident = async (description, threatType) => {
     setLoading(true);
     try {
-      const response = await axios.post('http://localhost:8000/api/incidents/analyze/', {
-        description: description
+      // PASO 1: Crear incidente en BD
+      const createResponse = await axios.post(`${API_BASE}/incidents/`, {
+        description: description,
+        threat_type: threatType || 'OTRO',
+        criticality: 'MEDIO',
+        resolved: false
       });
+      
+      const newIncident = createResponse.data;
+      console.log('Incidente creado:', newIncident);
+      
+      // PASO 2: Hacer análisis IA en el incidente creado
+      const analysisResponse = await axios.post(
+        `${API_BASE}/incidents/${newIncident.id}/analyze/`,
+        {}
+      );
+      
+      console.log('Análisis completado:', analysisResponse.data);
+      
+      // PASO 3: Recargar lista de incidentes para ver el nuevo
+      await loadIncidents();
+      
+      setError(null);
       setLoading(false);
-      return response.data;
+      
+      return analysisResponse.data;
     } catch (error) {
-      console.error('Error en análisis:', error);
+      console.error('Error creando incidente:', error);
+      setError('Error al crear incidente: ' + error.message);
       setLoading(false);
-      return { success: false, analysis: { recommendation: "Error en análisis automático. Contactar soporte técnico." } };
+      return { success: false };
+    }
+  };
+
+  // ===== ACTUALIZAR ESTADO =====
+  const updateIncidentStatus = async (id, newStatus) => {
+    try {
+      await axios.patch(`${API_BASE}/incidents/${id}/`, {
+        resolved: newStatus === 'RESUELTO'
+      });
+      await loadIncidents();
+      setError(null);
+    } catch (error) {
+      console.error('Error actualizando estado:', error);
+      setError('Error al actualizar estado');
+    }
+  };
+
+  // ===== ELIMINAR INCIDENTE =====
+  const deleteIncident = async (id) => {
+    try {
+      await axios.delete(`${API_BASE}/incidents/${id}/`);
+      await loadIncidents();
+      setError(null);
+    } catch (error) {
+      console.error('Error eliminando incidente:', error);
+      setError('Error al eliminar incidente');
     }
   };
 
@@ -139,7 +197,7 @@ function App() {
     }
   };
 
-  // Login Component - PREMIUM
+  // Login Component
   const LoginView = () => (
     <div className="login-container">
       <div className="login-card fade-in">
@@ -181,15 +239,16 @@ function App() {
     </div>
   );
 
-  // Employee Component - PREMIUM
+  // Employee Component
   const EmployeeView = () => {
     const [description, setDescription] = useState('');
     const [result, setResult] = useState(null);
 
     const handleAnalyze = async () => {
       if (!description.trim()) return;
-      const analysis = await analyzeIncident(description);
+      const analysis = await createIncident(description, 'OTRO');
       setResult(analysis);
+      setDescription('');
     };
 
     return (
@@ -200,13 +259,23 @@ function App() {
               <span style={{fontSize: '1.5rem', marginRight: '0.5rem'}}>🛡️</span>
               CyberShield Pro - Portal Empleado
             </span>
-            <button className="btn btn-outline-light" onClick={() => setCurrentView('login')}>
+            <button className="btn btn-outline-light" onClick={() => {
+              setCurrentView('login');
+              setIncidents([]);
+            }}>
               Cerrar Sesión
             </button>
           </div>
         </nav>
 
         <div className="container mt-5">
+          {error && (
+            <div className="alert alert-danger alert-dismissible fade show" role="alert">
+              {error}
+              <button type="button" className="btn-close" onClick={() => setError(null)}></button>
+            </div>
+          )}
+
           <div className="row">
             <div className="col-lg-8 mx-auto">
               <div className="card card-professional fade-in">
@@ -227,12 +296,7 @@ function App() {
                       rows="6"
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      placeholder="Describe detalladamente el incidente sospechoso que detectaste...
-
-Ejemplos:
-• Recibí un email del CEO solicitando transferencia urgente
-• Se abrió un archivo que bajó la velocidad del sistema
-• Mensaje de WhatsApp con enlace sospechoso del banco"
+                      placeholder="Describe detalladamente el incidente sospechoso que detectaste...\n\nEjemplos:\n• Recibí un email del CEO solicitando transferencia urgente\n• Se abrió un archivo que bajó la velocidad del sistema\n• Mensaje de WhatsApp con enlace sospechoso del banco"
                       style={{
                         border: '2px solid var(--neutral-200)',
                         borderRadius: 'var(--radius-lg)',
@@ -257,7 +321,7 @@ Ejemplos:
                   <div className="card-header">
                     <div className="d-flex align-items-center">
                       <div className="stats-icon primary me-3">
-                        📊
+                        📈
                       </div>
                       <div>
                         <h5 className="mb-1">Resultado del Análisis de Amenazas</h5>
@@ -278,7 +342,7 @@ Ejemplos:
                           <div className="col-md-4 text-center">
                             <h6 className="text-muted text-uppercase">Nivel de Criticidad</h6>
                             <span className={`badge badge-professional ${
-                              result.analysis.criticality === 'CRÍTICO' ? 'bg-danger' :
+                              result.analysis.criticality === 'CRITICO' ? 'bg-danger' :
                               result.analysis.criticality === 'ALTO' ? 'bg-warning' : 
                               result.analysis.criticality === 'MEDIO' ? 'bg-info' : 'bg-success'
                             }`} style={{fontSize: '0.9rem', padding: '0.75rem 1.5rem'}}>
@@ -316,9 +380,42 @@ Ejemplos:
                     ) : (
                       <div className="alert alert-danger">
                         <h6>❌ Error en Análisis</h6>
-                        <p className="mb-0">{result.analysis.recommendation}</p>
+                        <p className="mb-0">El análisis no se pudo completar. Intenta de nuevo.</p>
                       </div>
                     )}
+                  </div>
+                </div>
+              )}
+
+              {/* Lista de incidentes del usuario */}
+              {incidents.length > 0 && (
+                <div className="card card-professional mt-4">
+                  <div className="card-header">
+                    <h5>📄 Tus Incidentes Reportados</h5>
+                    <small className="text-muted">Total: {incidents.length} incidentes</small>
+                  </div>
+                  <div className="card-body p-0">
+                    <div className="list-group list-group-flush">
+                      {incidents.map((incident) => (
+                        <div key={incident.id} className="list-group-item">
+                          <div className="d-flex justify-content-between align-items-start">
+                            <div className="flex-grow-1">
+                              <h6 className="mb-1">#{incident.id} - {incident.threat_type}</h6>
+                              <p className="mb-1 text-muted small">{incident.description.substring(0, 80)}...</p>
+                              <small className="text-muted">
+                                Creado: {new Date(incident.created_at).toLocaleString('es-ES')}
+                              </small>
+                            </div>
+                            <span className={`badge badge-professional ${
+                              incident.criticality === 'CRITICO' ? 'bg-danger' :
+                              incident.criticality === 'ALTO' ? 'bg-warning' : 'bg-info'
+                            }`}>
+                              {incident.criticality}
+                            </span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
               )}
@@ -329,17 +426,26 @@ Ejemplos:
     );
   };
 
-  // Admin Dashboard Component - PREMIUM CON GRÁFICOS
+  // Admin Dashboard Component
   const AdminView = () => {
-    if (!dashboardStats) return null;
+    if (!dashboardStats) {
+      return (
+        <div className="text-center p-5">
+          <div className="spinner-border" role="status">
+            <span className="visually-hidden">Cargando...</span>
+          </div>
+          <p>Cargando datos...</p>
+        </div>
+      );
+    }
 
     // Datos para gráfico de barras
     const threatBarData = {
-      labels: Object.keys(dashboardStats.incidents_by_type),
+      labels: Object.keys(dashboardStats.incidents_by_type || {}),
       datasets: [
         {
           label: 'Incidentes por Tipo',
-          data: Object.values(dashboardStats.incidents_by_type),
+          data: Object.values(dashboardStats.incidents_by_type || {}),
           backgroundColor: [
             'rgba(59, 130, 246, 0.8)',
             'rgba(16, 185, 129, 0.8)',
@@ -364,10 +470,10 @@ Ejemplos:
 
     // Datos para gráfico circular
     const threatDoughnutData = {
-      labels: Object.keys(dashboardStats.incidents_by_type),
+      labels: Object.keys(dashboardStats.incidents_by_type || {}),
       datasets: [
         {
-          data: Object.values(dashboardStats.incidents_by_type),
+          data: Object.values(dashboardStats.incidents_by_type || {}),
           backgroundColor: [
             '#3b82f6',
             '#10b981',
@@ -383,27 +489,6 @@ Ejemplos:
       ]
     };
 
-    // Datos para gráfico de línea temporal
-    const timelineData = {
-      labels: dashboardStats.incidents_by_month.map(item => item.month),
-      datasets: [
-        {
-          label: 'Tendencia de Incidentes',
-          data: dashboardStats.incidents_by_month.map(item => item.count),
-          borderColor: '#3b82f6',
-          backgroundColor: 'rgba(59, 130, 246, 0.1)',
-          borderWidth: 3,
-          pointBackgroundColor: '#3b82f6',
-          pointBorderColor: '#ffffff',
-          pointBorderWidth: 3,
-          pointRadius: 8,
-          pointHoverRadius: 12,
-          fill: true,
-          tension: 0.4
-        }
-      ]
-    };
-
     return (
       <div className="container-fluid p-0">
         <nav className="navbar navbar-expand-lg navbar-professional">
@@ -412,7 +497,11 @@ Ejemplos:
               <span style={{fontSize: '1.5rem', marginRight: '0.5rem'}}>👑</span>
               CyberShield Pro - Centro de Comando SOC
             </span>
-            <button className="btn btn-outline-light" onClick={() => setCurrentView('login')}>
+            <button className="btn btn-outline-light" onClick={() => {
+              setCurrentView('login');
+              setIncidents([]);
+              setDashboardStats(null);
+            }}>
               Cerrar Sesión
             </button>
           </div>
@@ -420,16 +509,16 @@ Ejemplos:
 
         <div className="container-fluid mt-4 px-4">
           <div className="fade-in">
-            {/* KPIs Cards - PREMIUM */}
+            {/* KPIs Cards */}
             <div className="row mb-5">
               <div className="col-xl-3 col-md-6 mb-4">
                 <div className="card kpi-card primary">
                   <div className="card-body">
                     <div className="stats-icon primary mx-auto">
-                      📊
+                      📈
                     </div>
                     <h5>Total de Incidentes</h5>
-                    <h2>{dashboardStats.total_incidents}</h2>
+                    <h2>{dashboardStats.total_incidents || 0}</h2>
                   </div>
                 </div>
               </div>
@@ -440,7 +529,7 @@ Ejemplos:
                       🚨
                     </div>
                     <h5>Críticos</h5>
-                    <h2>{dashboardStats.critical_incidents}</h2>
+                    <h2>{dashboardStats.critical_incidents || 0}</h2>
                   </div>
                 </div>
               </div>
@@ -451,7 +540,7 @@ Ejemplos:
                       ✅
                     </div>
                     <h5>Resueltos</h5>
-                    <h2>{dashboardStats.resolved_incidents}</h2>
+                    <h2>{dashboardStats.resolved_incidents || 0}</h2>
                   </div>
                 </div>
               </div>
@@ -462,23 +551,27 @@ Ejemplos:
                       ⏳
                     </div>
                     <h5>Pendientes</h5>
-                    <h2>{dashboardStats.pending_incidents}</h2>
+                    <h2>{dashboardStats.pending_incidents || 0}</h2>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Gráficos Profesionales */}
+            {/* Gráficos */}
             <div className="row mb-5">
               <div className="col-xl-8 mb-4">
                 <div className="card card-professional">
                   <div className="card-header">
-                    <h5>📊 Distribución de Amenazas por Tipo</h5>
+                    <h5>📈 Distribución de Amenazas por Tipo</h5>
                     <small className="text-muted">Análisis comparativo de incidentes detectados</small>
                   </div>
                   <div className="card-body">
                     <div style={{ height: '350px' }}>
-                      <Bar data={threatBarData} options={chartOptions} />
+                      {Object.keys(dashboardStats.incidents_by_type || {}).length > 0 ? (
+                        <Bar data={threatBarData} options={chartOptions} />
+                      ) : (
+                        <p className="text-muted text-center">Sin datos aún</p>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -491,143 +584,80 @@ Ejemplos:
                   </div>
                   <div className="card-body">
                     <div style={{ height: '350px' }}>
-                      <Doughnut data={threatDoughnutData} options={chartOptions} />
+                      {Object.keys(dashboardStats.incidents_by_type || {}).length > 0 ? (
+                        <Doughnut data={threatDoughnutData} options={chartOptions} />
+                      ) : (
+                        <p className="text-muted text-center">Sin datos aún</p>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
 
-            {/* Tendencia Temporal */}
-            <div className="row mb-5">
-              <div className="col-12 mb-4">
-                <div className="card card-professional">
-                  <div className="card-header">
-                    <h5>📈 Tendencia de Incidentes - Últimos Meses</h5>
-                    <small className="text-muted">Evolución temporal de amenazas detectadas</small>
-                  </div>
-                  <div className="card-body">
-                    <div style={{ height: '300px' }}>
-                      <Line data={timelineData} options={chartOptions} />
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Actividad Reciente */}
-            <div className="row mb-4">
-              <div className="col-lg-6 mb-4">
-                <div className="card card-professional">
-                  <div className="card-header">
-                    <h5>⚡ Actividad Reciente</h5>
-                    <small className="text-muted">Últimos incidentes procesados</small>
-                  </div>
-                  <div className="card-body">
-                    {dashboardStats.recent_activity.map((activity, index) => (
-                      <div key={activity.id} className="d-flex justify-content-between align-items-center mb-3 p-3" 
-                           style={{
-                             background: 'var(--neutral-100)', 
-                             borderRadius: 'var(--radius-md)',
-                             border: '1px solid var(--neutral-200)'
-                           }}>
-                        <div>
-                          <strong>#{activity.id}</strong>
-                          <div className="text-muted small">{activity.type}</div>
-                          <div className="text-muted smaller">{activity.date}</div>
-                        </div>
-                        <span className={`badge badge-professional ${
-                          activity.status === 'RESUELTO' ? 'bg-success' : 
-                          activity.status === 'PENDIENTE' ? 'bg-warning' : 'bg-info'
-                        }`}>
-                          {activity.status}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="col-lg-6 mb-4">
-                <div className="card card-professional">
-                  <div className="card-header">
-                    <h5>🏆 Métricas de Rendimiento</h5>
-                    <small className="text-muted">Indicadores clave del sistema</small>
-                  </div>
-                  <div className="card-body">
-                    <div className="row text-center">
-                      <div className="col-6 mb-3">
-                        <h3 className="text-primary">98.5%</h3>
-                        <small className="text-muted">Precisión IA</small>
-                      </div>
-                      <div className="col-6 mb-3">
-                        <h3 className="text-success">2.3s</h3>
-                        <small className="text-muted">Tiempo Respuesta</small>
-                      </div>
-                      <div className="col-6">
-                        <h3 className="text-warning">24/7</h3>
-                        <small className="text-muted">Monitoreo</small>
-                      </div>
-                      <div className="col-6">
-                        <h3 className="text-info">99.9%</h3>
-                        <small className="text-muted">Uptime</small>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Tabla Premium */}
+            {/* Tabla de incidentes */}
             <div className="card card-professional mb-4">
               <div className="card-header">
                 <h5>📋 Registro Completo de Incidentes</h5>
-                <small className="text-muted">Historial detallado de todos los eventos de seguridad</small>
+                <small className="text-muted">Total: {incidents.length} incidentes en BD</small>
               </div>
               <div className="card-body p-0">
-                <div className="table-responsive">
-                  <table className="table table-professional mb-0">
-                    <thead>
-                      <tr>
-                        <th>ID</th>
-                        <th>Tipo de Amenaza</th>
-                        <th>Criticidad</th>
-                        <th>Estado</th>
-                        <th>Fecha</th>
-                        <th>Confianza IA</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {incidents.map((incident) => (
-                        <tr key={incident.id}>
-                          <td><strong>#{incident.id}</strong></td>
-                          <td>
-                            <span className="fw-semibold">{incident.threat_type}</span>
-                          </td>
-                          <td>
-                            <span className={`badge badge-professional ${
-                              incident.criticality === 'CRÍTICO' ? 'bg-danger' :
-                              incident.criticality === 'ALTO' ? 'bg-warning' : 'bg-info'
-                            }`}>
-                              {incident.criticality}
-                            </span>
-                          </td>
-                          <td>
-                            <span className={`badge badge-professional ${incident.resolved ? 'bg-success' : 'bg-warning'}`}>
-                              {incident.resolved ? 'RESUELTO' : 'PENDIENTE'}
-                            </span>
-                          </td>
-                          <td>{new Date(incident.created_at).toLocaleDateString('es-ES')}</td>
-                          <td>
-                            <strong className="text-success">
-                              {Math.round(incident.confidence_score * 100)}%
-                            </strong>
-                          </td>
+                {incidents.length > 0 ? (
+                  <div className="table-responsive">
+                    <table className="table table-professional mb-0">
+                      <thead>
+                        <tr>
+                          <th>ID</th>
+                          <th>Tipo de Amenaza</th>
+                          <th>Criticidad</th>
+                          <th>Descripción</th>
+                          <th>Estado</th>
+                          <th>Fecha</th>
+                          <th>Acciones</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody>
+                        {incidents.map((incident) => (
+                          <tr key={incident.id}>
+                            <td><strong>#{incident.id}</strong></td>
+                            <td>{incident.threat_type}</td>
+                            <td>
+                              <span className={`badge badge-professional ${
+                                incident.criticality === 'CRITICO' ? 'bg-danger' :
+                                incident.criticality === 'ALTO' ? 'bg-warning' : 'bg-info'
+                              }`}>
+                                {incident.criticality}
+                              </span>
+                            </td>
+                            <td>{incident.description.substring(0, 50)}...</td>
+                            <td>
+                              <span className={`badge badge-professional ${incident.resolved ? 'bg-success' : 'bg-warning'}`}>
+                                {incident.resolved ? 'RESUELTO' : 'PENDIENTE'}
+                              </span>
+                            </td>
+                            <td>{new Date(incident.created_at).toLocaleDateString('es-ES')}</td>
+                            <td>
+                              <button 
+                                className="btn btn-sm btn-outline-primary"
+                                onClick={() => updateIncidentStatus(incident.id, incident.resolved ? 'PENDIENTE' : 'RESUELTO')}
+                              >
+                                {incident.resolved ? 'Abrir' : 'Resolver'}
+                              </button>
+                              <button 
+                                className="btn btn-sm btn-outline-danger ms-1"
+                                onClick={() => deleteIncident(incident.id)}
+                              >
+                                Eliminar
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-muted text-center p-3">No hay incidentes registrados aún</p>
+                )}
               </div>
             </div>
           </div>
