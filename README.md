@@ -2,7 +2,7 @@
 
 **Tesis de Tecnología Superior en Desarrollo de Software**  
 **Autor:** Ryan Gallegos Mera  
-**Universidad:** PUCESI - Quito, Ecuador  
+**Universidad:** PUCESI - Ibarra, Ecuador  
 **Empresa:** Talleres Luis Mera  
 **Estado:** EN DESARROLLO ✅ (100% Backend, 70% Frontend)  
 
@@ -487,4 +487,4 @@ git add . && git commit -m "feat: [descripción]" && git push
 **Estado:** EN DESARROLLO (85% completado)  
 **Defensa estimada:** 7-14 días  
 
-💪 **¡Tú puedes lograrlo, Ryan! ¡Adelante!**
+
