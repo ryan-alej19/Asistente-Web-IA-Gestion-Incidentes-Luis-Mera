@@ -2,6 +2,7 @@
 
 import os
 from pathlib import Path
+from datetime import timedelta
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -29,6 +30,7 @@ INSTALLED_APPS = [
     'rest_framework',           # ← UNA SOLA VEZ
     'django_filters',           # ← UNA SOLA VEZ
     'corsheaders',
+    'rest_framework_simplejwt',
     
     # Tu app
     'incidents',
@@ -66,7 +68,7 @@ TEMPLATES = [
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # ╔════════════════════════════════════════════════════════════════════╗
-# ║ DATABASE CONFIGURATION ║
+# ║ DATABASE CONFIGURATION                                             ║
 # ╚════════════════════════════════════════════════════════════════════╝
 
 DATABASES = {
@@ -91,6 +93,12 @@ AUTH_PASSWORD_VALIDATORS = [
         'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
     },
 ]
+
+# ╔════════════════════════════════════════════════════════════════════╗
+# ║ CUSTOM USER MODEL                                                  ║
+# ╚════════════════════════════════════════════════════════════════════╝
+
+AUTH_USER_MODEL = 'incidents.CustomUser'  # ← IMPORTANTE PARA LA TESIS
 
 # Internationalization
 LANGUAGE_CODE = 'es-ec'
@@ -154,12 +162,9 @@ REST_FRAMEWORK = {
     ],
 }
 
-
 # ╔════════════════════════════════════════════════════════════════════╗
 # ║ JWT CONFIGURATION - Simple JWT                                    ║
 # ╚════════════════════════════════════════════════════════════════════╝
-
-from datetime import timedelta
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
@@ -174,13 +179,10 @@ SIMPLE_JWT = {
     'ISSUER': None,
     'JTI_CLAIM': 'jti',
     'TOKEN_TYPE_CLAIM': 'token_type',
-    'JTI_CLAIM_CLAIM': 'jti',
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
-    'USER_AUTHENTICATION_RULE': 'rest_framework_simplejwt.authentication.default_user_authentication_rule',
     'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
     'TOKEN_USER_CLASS': 'rest_framework_simplejwt.models.TokenUser',
-    'JTI_CLAIM': 'jti',
 }
 
 # Logging para debug
