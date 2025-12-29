@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 class Incident(models.Model):
     """
@@ -42,14 +43,13 @@ class Incident(models.Model):
     
     # IA - Confianza de la detección
     confidence = models.FloatField(
-        default=0.0,
-        help_text="Porcentaje de confianza de la detección (0-1)",
-        validators=[
-            lambda x: 0 <= x <= 1 or (_ for _ in ()).throw(
-                ValueError("Confidence debe estar entre 0 y 1")
-            )
-        ]
-    )
+    default=0.0,
+    help_text="Porcentaje de confianza de la detección (0-1)",
+    validators=[
+        MinValueValidator(0.0),
+        MaxValueValidator(1.0)
+    ]
+)
     
     # IA - Tipo de amenaza detectada
     threat_type = models.CharField(
