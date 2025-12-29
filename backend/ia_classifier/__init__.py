@@ -1,3 +1,1 @@
-from .classifier import IncidentClassifier
-
-__all__ = ['IncidentClassifier']
+# Módulo de clasificación de incidentes con IA simple
