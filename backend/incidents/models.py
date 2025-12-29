@@ -1,11 +1,48 @@
 from django.db import models
-from django.contrib.auth.models import User
+from django.contrib.auth.models import AbstractUser, User
 from django.core.validators import MinValueValidator, MaxValueValidator
+
+
+class CustomUser(AbstractUser):
+    """
+    Modelo de usuario personalizado con roles para la tesis
+    Roles: admin (gestor del sistema), analyst (analista SOC), employee (reporta incidentes)
+    """
+    ROLE_CHOICES = [
+        ('admin', 'Administrador'),
+        ('analyst', 'Analista SOC'),
+        ('employee', 'Empleado'),
+    ]
+    
+    role = models.CharField(
+        max_length=20,
+        choices=ROLE_CHOICES,
+        default='employee',
+        help_text="Rol del usuario en el sistema"
+    )
+    
+    class Meta:
+        db_table = 'custom_users'
+        verbose_name = 'Usuario Personalizado'
+        verbose_name_plural = 'Usuarios Personalizados'
+    
+    def __str__(self):
+        return f"{self.username} ({self.get_role_display()})"
+    
+    def is_admin(self):
+        return self.role == 'admin'
+    
+    def is_analyst(self):
+        return self.role == 'analyst'
+    
+    def is_employee(self):
+        return self.role == 'employee'
+
 
 class Incident(models.Model):
     """
     Modelo de Incidente de Seguridad
-    Almacena reportes de incidentes detectados por análisis de logs
+    Almacena reportes de incidentes detectados o reportados por usuarios
     """
     
     # Estados posibles del incidente
@@ -28,6 +65,12 @@ class Incident(models.Model):
     # Campos principales
     title = models.CharField(max_length=255, help_text="Título del incidente")
     description = models.TextField(help_text="Descripción detallada del incidente")
+    incident_type = models.CharField(
+        max_length=100,
+        blank=True,
+        default='',
+        help_text="Tipo de incidente (phishing, malware, acceso_sospechoso, etc)"
+    )
     severity = models.CharField(
         max_length=20,
         choices=SEVERITY_CHOICES,
@@ -43,13 +86,13 @@ class Incident(models.Model):
     
     # IA - Confianza de la detección
     confidence = models.FloatField(
-    default=0.0,
-    help_text="Porcentaje de confianza de la detección (0-1)",
-    validators=[
-        MinValueValidator(0.0),
-        MaxValueValidator(1.0)
-    ]
-)
+        default=0.0,
+        help_text="Porcentaje de confianza de la detección (0-1)",
+        validators=[
+            MinValueValidator(0.0),
+            MaxValueValidator(1.0)
+        ]
+    )
     
     # IA - Tipo de amenaza detectada
     threat_type = models.CharField(
@@ -78,12 +121,19 @@ class Incident(models.Model):
     )
     
     # Log de auditoría
+    reported_by = models.ForeignKey(
+        CustomUser,
+        on_delete=models.CASCADE,
+        related_name='reported_incidents',
+        help_text="Usuario que reportó el incidente"
+    )
     assigned_to = models.ForeignKey(
-        User,
+        CustomUser,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        help_text="Usuario asignado para investigar"
+        related_name='assigned_incidents',
+        help_text="Usuario analista asignado para investigar"
     )
     notes = models.TextField(
         blank=True,
