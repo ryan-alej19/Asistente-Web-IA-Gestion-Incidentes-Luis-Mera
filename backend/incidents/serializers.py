@@ -17,61 +17,61 @@ class IncidentSerializer(serializers.ModelSerializer):
     """
     Serializer completo para Incident
     Incluye información del usuario que reportó y del asignado
+    CON MANEJO SEGURO DE VALORES NULL
     """
-    reported_by_username = serializers.CharField(
-        source='reported_by.username',
-        read_only=True
-    )
-    reported_by_email = serializers.CharField(
-        source='reported_by.email',
-        read_only=True
-    )
-    assigned_to_username = serializers.CharField(
-        source='assigned_to.username',
-        read_only=True,
-        allow_null=True
-    )
-    assigned_to_email = serializers.CharField(
-        source='assigned_to.email',
-        read_only=True,
-        allow_null=True
-    )
-    
+    reported_by_username = serializers.SerializerMethodField()
+    reported_by_email = serializers.SerializerMethodField()
+    assigned_to_username = serializers.SerializerMethodField()
+    assigned_to_email = serializers.SerializerMethodField()
+    reported_url = serializers.CharField(source='url', read_only=True, allow_null=True, allow_blank=True)
+
     class Meta:
         model = Incident
         fields = [
-            'id',
-            'title',
-            'description',
-            'incident_type',
-            'severity',
-            'status',
-            'confidence',
-            'threat_type',
-            'detected_at',
-            'created_at',
-            'updated_at',
-            'resolved_at',
-            'reported_by',
-            'reported_by_username',
-            'reported_by_email',
-            'assigned_to',
-            'assigned_to_username',
-            'assigned_to_email',
-            'notes',
-            'log_source',
-            'ip_source',
-            'ip_destination',
-        ]
+    'id',
+    'title',
+    'description',
+    'incident_type',
+    'severity',
+    'status',
+    'confidence',
+    'threat_type',
+    'reported_url',  
+    'detected_at',
+    'created_at',
+    'updated_at',
+    'resolved_at',
+    'reported_by',
+    'reported_by_username',
+    'reported_by_email',
+    'assigned_to',
+    'assigned_to_username',
+    'assigned_to_email',
+    'notes',
+    'log_source',
+]
         read_only_fields = [
             'id',
             'created_at',
             'updated_at',
             'detected_at',
             'reported_by',
-            'reported_by_username',
-            'reported_by_email',
+            'severity',
+            'confidence',
         ]
+    
+    # 🔥 MÉTODOS SEGUROS QUE MANEJAN None
+    def get_reported_by_username(self, obj):
+        return obj.reported_by.username if obj.reported_by else 'Desconocido'
+    
+    def get_reported_by_email(self, obj):
+        return obj.reported_by.email if obj.reported_by else 'N/A'
+    
+    def get_assigned_to_username(self, obj):
+        return obj.assigned_to.username if obj.assigned_to else 'Sin asignar'
+    
+    def get_assigned_to_email(self, obj):
+        return obj.assigned_to.email if obj.assigned_to else 'N/A'
 
 
 class IncidentListSerializer(serializers.ModelSerializer):
@@ -79,15 +79,8 @@ class IncidentListSerializer(serializers.ModelSerializer):
     Serializer simplificado para listar incidentes
     Menos campos que el serializer completo para respuestas más rápidas
     """
-    reported_by_username = serializers.CharField(
-        source='reported_by.username',
-        read_only=True
-    )
-    assigned_to_username = serializers.CharField(
-        source='assigned_to.username',
-        read_only=True,
-        allow_null=True
-    )
+    reported_by_username = serializers.SerializerMethodField()
+    assigned_to_username = serializers.SerializerMethodField()
     
     class Meta:
         model = Incident
@@ -98,6 +91,7 @@ class IncidentListSerializer(serializers.ModelSerializer):
             'status',
             'confidence',
             'threat_type',
+            'url',
             'created_at',
             'reported_by_username',
             'assigned_to_username',
@@ -105,8 +99,13 @@ class IncidentListSerializer(serializers.ModelSerializer):
         read_only_fields = [
             'id',
             'created_at',
-            'reported_by_username',
         ]
+    
+    def get_reported_by_username(self, obj):
+        return obj.reported_by.username if obj.reported_by else 'Desconocido'
+    
+    def get_assigned_to_username(self, obj):
+        return obj.assigned_to.username if obj.assigned_to else 'Sin asignar'
 
 
 class IncidentCreateSerializer(serializers.ModelSerializer):
@@ -120,6 +119,8 @@ class IncidentCreateSerializer(serializers.ModelSerializer):
             'title',
             'description',
             'incident_type',
+            'threat_type',
+            'url',
         ]
 
 

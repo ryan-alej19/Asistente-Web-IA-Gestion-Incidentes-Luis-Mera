@@ -65,6 +65,15 @@ class Incident(models.Model):
     # Campos principales
     title = models.CharField(max_length=255, help_text="Título del incidente")
     description = models.TextField(help_text="Descripción detallada del incidente")
+    
+    # 🔥 NUEVO: Campo para URL/Email reportado
+    url = models.URLField(
+        max_length=500,
+        blank=True,
+        null=True,
+        help_text="URL o correo electrónico reportado como sospechoso"
+    )
+    
     incident_type = models.CharField(
         max_length=100,
         blank=True,
