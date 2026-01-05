@@ -1,176 +1,180 @@
+"""
+🤖 SERVICIO DE GEMINI - ANÁLISIS CONTEXTUAL
+Ryan Gallegos Mera - PUCESI
+Última actualización: 03 de Enero, 2026
+"""
+
 import os
-from typing import Dict, Any
 import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()
 
 
 class GeminiService:
+    """
+    🤖 Servicio para análisis contextual de incidentes usando Gemini 1.5 Flash
+    """
+    
     def __init__(self):
         """
-        Inicializa el servicio de Gemini para análisis de incidentes.
-        Configura la API Key desde variables de entorno.
+        Inicializa el servicio de Gemini
         """
         api_key = os.getenv('GEMINI_API_KEY')
         
         if not api_key:
-            raise ValueError("⚠️ GEMINI_API_KEY no encontrada en variables de entorno")
+            raise ValueError("❌ GEMINI_API_KEY no está configurada en .env")
         
-        # Configurar API correctamente
         genai.configure(api_key=api_key)
         
-        # Usar modelo actualizado (gemini-1.5-flash es gratuito y rápido)
+        # 🔥 CAMBIADO A GEMINI 1.5 FLASH (MÁS ESTABLE Y MAYOR CUOTA)
         self.model = genai.GenerativeModel('gemini-1.5-flash')
         
-        print("✅ GeminiService inicializado correctamente")
+        print("✅ GeminiService inicializado correctamente con Gemini 1.5 Flash")
 
 
-    def analyze_incident(self, description: str, url: str = None) -> Dict[str, Any]:
+    def analyze_incident(self, url, description, threat_type, severity):
         """
-        Analiza un incidente de seguridad usando Gemini.
+        🔍 Analiza un incidente de ciberseguridad usando Gemini
         
         Args:
+            url (str): URL reportada (puede ser vacía)
             description (str): Descripción del incidente
-            url (str, optional): URL o archivo relacionado
+            threat_type (str): Tipo de amenaza (phishing, malware, etc.)
+            severity (str): Nivel de severidad detectado por IA local
         
         Returns:
-            dict: Resultado del análisis con patrones, explicación y recomendaciones
+            dict: Análisis contextual del incidente
         """
         try:
-            # Construir prompt mejorado para análisis conservador
+            print(f"\n🤖 GEMINI: Iniciando análisis...")
+            print(f"   - URL: {url or 'No especificada'}")
+            print(f"   - Tipo: {threat_type}")
+            print(f"   - Severidad: {severity}")
+            
+            # 🎯 PROMPT OPTIMIZADO PARA TESIS
             prompt = f"""
-Eres un analista de ciberseguridad experto. Analiza el siguiente incidente de seguridad:
+Eres un asistente de ciberseguridad para pequeñas empresas.
 
-**Descripción:** {description}
-**URL/Archivo:** {url if url else 'No proporcionado'}
+**CONTEXTO DEL INCIDENTE:**
+- Tipo de amenaza: {threat_type}
+- Severidad detectada: {severity}
+- URL reportada: {url or "No proporcionada"}
+- Descripción: {description or "Sin descripción"}
 
-CONTEXTO IMPORTANTE:
-- Si la descripción es vaga o muy corta (ej: "que es eso", "ayuda"), indica que NO hay suficiente información para análisis.
-- Si la URL es .onion, menciona que es de la red Tor y requiere análisis especializado.
-- Sé CONSERVADOR: NO clasifiques como peligroso sin evidencia clara.
-- Si NO hay indicios de amenaza, dilo explícitamente.
+**TU TAREA:**
+Proporciona un análisis breve (máximo 200 palabras) que incluya:
 
-Proporciona ÚNICAMENTE:
-1. **Patrones detectados**: Máximo 3 señales técnicas concretas (o "Ninguno identificado" si no hay).
-2. **Explicación**: ¿Es realmente malicioso? ¿Por qué? Sé técnico pero claro.
-3. **Recomendación**: Acción concreta y proporcional al riesgo real (no exageres).
+1. **Explicación simple** de por qué es {severity} (en español sencillo)
+2. **Patrones detectados** (máximo 3 puntos clave)
+3. **Recomendación práctica** inmediata para el usuario
 
-FORMATO REQUERIDO:
-**Patrones detectados:**
-- [Patrón 1]
-- [Patrón 2]
-- [Patrón 3]
+**IMPORTANTE:**
+- Usa lenguaje NO técnico (para pequeñas empresas)
+- Sé directo y práctico
+- NO inventes datos técnicos
+- Si no estás seguro, di "requiere revisión manual"
 
-**Explicación:**
-[Tu análisis técnico aquí]
-
-**Recomendación:**
-[Acción específica]
+**FORMATO DE RESPUESTA:**
+Explicación: [tu explicación]
+Patrones: [lista de 2-3 patrones]
+Recomendación: [acción concreta]
 """
-
-            # Generar respuesta con Gemini
+            
+            # 🚀 GENERAR RESPUESTA
             response = self.model.generate_content(prompt)
             
-            # Extraer texto de respuesta
+            if not response or not response.text:
+                raise Exception("Gemini no retornó contenido válido")
+            
             analysis_text = response.text.strip()
             
-            # Parsear respuesta estructurada
-            patterns = []
-            explanation = ""
-            recommendation = ""
+            # 📝 PARSEAR RESPUESTA
+            result = self._parse_gemini_response(analysis_text)
             
-            # Dividir por líneas
-            lines = analysis_text.split('\n')
+            print(f"✅ GEMINI: Análisis completado exitosamente")
+            
+            return {
+                'success': True,
+                'explanation': result.get('explanation', analysis_text),
+                'patterns_detected': result.get('patterns', []),
+                'recommendation': result.get('recommendation', 'Solicitar revisión del equipo de seguridad'),
+                'raw_analysis': analysis_text
+            }
+        
+        except Exception as e:
+            error_msg = str(e)
+            print(f"❌ ERROR en GeminiService.analyze_incident: {error_msg}")
+            
+            return {
+                'success': False,
+                'explanation': 'Análisis contextual no disponible temporalmente',
+                'patterns_detected': [],
+                'recommendation': 'El incidente ha sido registrado y será revisado por el equipo de seguridad',
+                'error': error_msg
+            }
+
+
+    def _parse_gemini_response(self, text):
+        """
+        📝 Parsea la respuesta de Gemini en formato estructurado
+        
+        Args:
+            text (str): Texto de respuesta de Gemini
+        
+        Returns:
+            dict: Datos estructurados
+        """
+        try:
+            lines = text.split('\n')
+            result = {
+                'explanation': '',
+                'patterns': [],
+                'recommendation': ''
+            }
+            
             current_section = None
             
             for line in lines:
                 line = line.strip()
+                
                 if not line:
                     continue
                 
-                # Detectar secciones por marcadores
-                line_lower = line.lower()
-                if 'patron' in line_lower or 'señal' in line_lower:
-                    current_section = 'patterns'
-                    continue
-                elif 'explicación' in line_lower or 'explicacion' in line_lower or 'análisis' in line_lower:
+                # Detectar secciones
+                if 'Explicación:' in line or 'Explicacion:' in line:
                     current_section = 'explanation'
-                    continue
-                elif 'recomendación' in line_lower or 'recomendacion' in line_lower:
+                    result['explanation'] = line.split(':', 1)[1].strip()
+                
+                elif 'Patrones:' in line:
+                    current_section = 'patterns'
+                    pattern_text = line.split(':', 1)[1].strip()
+                    if pattern_text:
+                        result['patterns'].append(pattern_text)
+                
+                elif 'Recomendación:' in line or 'Recomendacion:' in line:
                     current_section = 'recommendation'
-                    continue
+                    result['recommendation'] = line.split(':', 1)[1].strip()
                 
                 # Agregar contenido a la sección actual
-                if current_section == 'patterns':
-                    # Extraer patrones de listas
-                    if line.startswith('-') or line.startswith('*') or line.startswith('•'):
-                        clean_pattern = line.lstrip('-*•').strip()
-                        if clean_pattern and clean_pattern.lower() not in ['ninguno', 'ninguno identificado', 'n/a']:
-                            patterns.append(clean_pattern)
-                    elif line[0].isdigit() and ('.' in line[:3] or ')' in line[:3]):
-                        clean_pattern = line.split('.', 1)[-1].split(')', 1)[-1].strip()
-                        if clean_pattern and clean_pattern.lower() not in ['ninguno', 'ninguno identificado', 'n/a']:
-                            patterns.append(clean_pattern)
-                            
-                elif current_section == 'explanation':
-                    # Evitar copiar encabezados
-                    if not line.startswith('**') and not line.startswith('#'):
-                        explanation += line + " "
-                        
-                elif current_section == 'recommendation':
-                    # Evitar copiar encabezados
-                    if not line.startswith('**') and not line.startswith('#'):
-                        recommendation += line + " "
+                elif current_section:
+                    if current_section == 'explanation' and not result['explanation']:
+                        result['explanation'] += line
+                    elif current_section == 'patterns' and (line.startswith('-') or line.startswith('•')):
+                        result['patterns'].append(line.lstrip('-•').strip())
+                    elif current_section == 'recommendation' and not result['recommendation']:
+                        result['recommendation'] += line
             
-            # Limpiar espacios extras
-            explanation = explanation.strip()
-            recommendation = recommendation.strip()
+            # Validar que al menos tengamos explicación
+            if not result['explanation']:
+                result['explanation'] = text[:300]  # Primeros 300 caracteres
             
-            # Validación: si no se parseó correctamente, usar fallbacks
-            if not explanation:
-                # Buscar entre "Explicación:" y "Recomendación:"
-                if 'explicación' in analysis_text.lower() or 'explicacion' in analysis_text.lower():
-                    start = analysis_text.lower().find('explicación')
-                    if start == -1:
-                        start = analysis_text.lower().find('explicacion')
-                    end = analysis_text.lower().find('recomendación', start)
-                    if end == -1:
-                        end = analysis_text.lower().find('recomendacion', start)
-                    if start != -1:
-                        explanation = analysis_text[start:end if end != -1 else len(analysis_text)].split(':', 1)[-1].strip()
-                        explanation = explanation[:500]  # Limitar a 500 caracteres
-                
-                if not explanation:
-                    explanation = "No se pudo extraer análisis estructurado. Revisa el contexto proporcionado."
-            
-            if not recommendation:
-                # Buscar sección de recomendación
-                if 'recomendación' in analysis_text.lower() or 'recomendacion' in analysis_text.lower():
-                    start = analysis_text.lower().find('recomendación')
-                    if start == -1:
-                        start = analysis_text.lower().find('recomendacion')
-                    if start != -1:
-                        recommendation = analysis_text[start:].split(':', 1)[-1].strip()
-                        recommendation = recommendation[:300]  # Limitar a 300 caracteres
-                
-                if not recommendation:
-                    recommendation = "Consulta con el equipo de seguridad antes de interactuar con el contenido reportado."
-            
-            # Limitar patrones a máximo 3
-            patterns = patterns[:3]
-            
-            return {
-                'success': True,
-                'patterns_detected': patterns,
-                'explanation': explanation,
-                'recommendation': recommendation,
-                'raw_analysis': analysis_text  # Para debugging
-            }
-            
+            return result
+        
         except Exception as e:
-            print(f"❌ ERROR en GeminiService.analyze_incident: {e}")
+            print(f"⚠️ Error parseando respuesta de Gemini: {e}")
             return {
-                'success': False,
-                'error': str(e),
-                'patterns_detected': [],
-                'explanation': 'No se pudo completar el análisis con IA. Error técnico en el servicio.',
-                'recommendation': 'Consulta con el equipo de seguridad para análisis manual del incidente.'
+                'explanation': text[:300] if text else "Análisis no disponible",
+                'patterns': [],
+                'recommendation': 'Revisión manual recomendada'
             }

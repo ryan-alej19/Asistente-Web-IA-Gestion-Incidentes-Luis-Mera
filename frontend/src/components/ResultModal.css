@@ -1,0 +1,101 @@
+/* ESTILO PARA MODAL DE EMPLEADO */
+.employee-modal {
+  max-width: 600px;
+  padding: 2rem;
+}
+
+.risk-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 1.5rem;
+  border-radius: 12px;
+  color: white;
+  font-weight: bold;
+  margin: 1rem 0;
+}
+
+.risk-label {
+  font-size: 0.9rem;
+  opacity: 0.9;
+  margin-bottom: 0.5rem;
+}
+
+.risk-value {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+}
+
+.confidence {
+  font-size: 0.85rem;
+  opacity: 0.85;
+  background: rgba(255,255,255,0.2);
+  padding: 0.3rem 0.8rem;
+  border-radius: 20px;
+  margin-top: 0.5rem;
+}
+
+.info-section {
+  background: #f8f9fa;
+  padding: 1.2rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+  border-left: 4px solid #007bff;
+}
+
+.info-title {
+  margin: 0 0 0.8rem 0;
+  color: #495057;
+  font-size: 1rem;
+}
+
+.info-text {
+  margin: 0;
+  color: #212529;
+  line-height: 1.6;
+}
+
+.status-section {
+  padding: 1.2rem;
+  background: #e9ecef;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.status-badge {
+  display: inline-block;
+  padding: 0.5rem 1rem;
+  background: #007bff;
+  color: white;
+  border-radius: 20px;
+  font-weight: bold;
+  margin-top: 0.5rem;
+}
+
+.status-message {
+  margin-top: 0.8rem;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.report-summary {
+  background: #fff3cd;
+  padding: 1.2rem;
+  border-radius: 8px;
+  border: 1px solid #ffc107;
+  margin-top: 1.5rem;
+}
+
+.report-summary h4 {
+  margin-top: 0;
+  color: #856404;
+}
+
+.report-summary p {
+  margin: 0.5rem 0;
+  color: #212529;
+}
+
+.report-summary strong {
+  color: #856404;
+}

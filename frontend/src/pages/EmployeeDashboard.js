@@ -1,3 +1,4 @@
+import EmployeeResultModal from '../components/EmployeeResultModal';
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useNavigate } from 'react-router-dom';
@@ -13,6 +14,7 @@ function EmployeeDashboard() {
     url: '',
     description: ''
   });
+  const [attachedFile, setAttachedFile] = useState(null); // 🔥 NUEVO
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [myIncidents, setMyIncidents] = useState([]);
@@ -48,8 +50,9 @@ function EmployeeDashboard() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!form.url.trim()) {
-      alert('Por favor ingresa una URL o correo');
+    // 🔥 VALIDACIÓN ACTUALIZADA: al menos uno de los tres campos
+    if (!form.url.trim() && !form.description.trim() && !attachedFile) {
+      alert('Por favor ingresa al menos una URL, descripción o archivo adjunto');
       return;
     }
 
@@ -58,15 +61,32 @@ function EmployeeDashboard() {
     try {
       const token = localStorage.getItem('access_token');
       
-      const response = await axios.post('http://localhost:8000/api/incidents/', {
-        title: `Reporte: ${form.url}`,
-        description: form.description || `Usuario reportó: ${form.url}`,
-        threat_type: 'phishing',
-        url: form.url,
-      }, {
+      // 🔥 USAR FormData para enviar archivos
+      const formData = new FormData();
+      
+      // Título inteligente
+      const title = form.url 
+        ? `Reporte: ${form.url.substring(0, 50)}` 
+        : attachedFile
+        ? `Reporte: ${attachedFile.name}`
+        : 'Reporte: Sin URL';
+      
+      formData.append('title', title);
+      formData.append('description', form.description || 'Sin descripción adicional');
+      formData.append('threat_type', 'phishing');
+      
+      if (form.url.trim()) {
+        formData.append('url', form.url);
+      }
+      
+      if (attachedFile) {
+        formData.append('attached_file', attachedFile);
+      }
+      
+      const response = await axios.post('http://localhost:8000/api/incidents/', formData, {
         headers: { 
           'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+          // 🔥 NO pongas Content-Type, axios lo maneja automáticamente con FormData
         }
       });
       
@@ -74,6 +94,11 @@ function EmployeeDashboard() {
       
       setSuccess(true);
       setForm({ url: '', description: '' });
+      setAttachedFile(null);
+      
+      // Resetear input de archivo
+      const fileInput = document.getElementById('file-input');
+      if (fileInput) fileInput.value = '';
       
       setTimeout(async () => {
         await fetchMyIncidents();
@@ -125,7 +150,7 @@ function EmployeeDashboard() {
         <form onSubmit={handleSubmit} className="report-form">
           <div className="form-group">
             <label htmlFor="url">
-              🔗 URL o Correo Sospechoso <span className="required">*</span>
+              🔗 URL o Correo Sospechoso <span className="optional">(Opcional)</span>
             </label>
             <input
               id="url"
@@ -135,7 +160,6 @@ function EmployeeDashboard() {
               onChange={handleChange}
               placeholder="Ej: http://suspicious-site.com o fake@email.com"
               className="form-control"
-              required
             />
           </div>
 
@@ -154,10 +178,38 @@ function EmployeeDashboard() {
             />
           </div>
 
+          {/* 🔥 NUEVO: Input para archivo */}
+          <div className="form-group">
+            <label htmlFor="file-input">
+              📎 Archivo Adjunto <span className="optional">(Opcional)</span>
+            </label>
+            <input
+              id="file-input"
+              type="file"
+              accept="image/*,.pdf,.doc,.docx,.txt"
+              onChange={(e) => setAttachedFile(e.target.files[0])}
+              className="form-control"
+            />
+            {attachedFile && (
+              <div style={{ 
+                marginTop: '8px', 
+                padding: '8px', 
+                background: '#f0f9ff', 
+                borderRadius: '4px',
+                fontSize: '14px'
+              }}>
+                📄 {attachedFile.name} ({(attachedFile.size / 1024).toFixed(2)} KB)
+              </div>
+            )}
+            <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '4px' }}>
+              Formatos aceptados: Imágenes, PDF, Word, TXT (máx. 5MB)
+            </small>
+          </div>
+
           <button 
             type="submit" 
             className="btn-submit"
-            disabled={loading}
+            disabled={loading || (!form.url.trim() && !form.description.trim() && !attachedFile)}
           >
             {loading ? '⏳ Analizando...' : '🚀 Reportar y Analizar'}
           </button>
@@ -191,6 +243,8 @@ function EmployeeDashboard() {
                     <td className="url-cell">
                       {incident.url ? (
                         <span title={incident.url}>{incident.url}</span>
+                      ) : incident.attached_file ? (
+                        <span className="no-url">📎 {incident.title}</span>
                       ) : (
                         <span className="no-url">{incident.title}</span>
                       )}

@@ -215,3 +215,6 @@ VIRUSTOTAL_API_KEY = '490f40a88479a02a482c2d1bb35c5391190d98caaa702eaacdac055a38
 # 🤖 GEMINI API CONFIGURATION
 # ==========================================
 GEMINI_API_KEY = 'AIzaSyA0YAkH7llL-7IXhPA3QGtHyBMisHu9MGA'
+# Al final del archivo
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')

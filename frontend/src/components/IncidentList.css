@@ -1,0 +1,221 @@
+/**
+ * 🎨 ESTILOS LISTA DE INCIDENTES
+ * Ryan Gallegos Mera - PUCESI
+ */
+
+.incident-list-container {
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 20px;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+}
+
+.incident-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 30px;
+}
+
+.incident-list-header h1 {
+  color: #2c3e50;
+  font-size: 2rem;
+}
+
+.btn-new-incident {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 12px 24px;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: transform 0.2s;
+}
+
+.btn-new-incident:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+}
+
+/* 🔍 FILTROS */
+.filters {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: 10px 20px;
+  border: 2px solid #e0e0e0;
+  background: white;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s;
+  font-size: 0.95rem;
+}
+
+.filter-btn:hover {
+  border-color: #667eea;
+  transform: translateY(-1px);
+}
+
+.filter-btn.active {
+  background: #667eea;
+  color: white;
+  border-color: #667eea;
+  font-weight: 600;
+}
+
+/* 📊 TABLA */
+.table-container {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+  overflow: hidden;
+}
+
+.incidents-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.incidents-table thead {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.incidents-table th {
+  padding: 15px;
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.incidents-table tbody tr {
+  border-bottom: 1px solid #f0f0f0;
+  transition: background 0.2s;
+}
+
+.incidents-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.incidents-table td {
+  padding: 15px;
+  font-size: 0.9rem;
+}
+
+.description-cell {
+  max-width: 300px;
+  color: #555;
+}
+
+/* 🏷️ BADGES */
+.incident-type {
+  background: #e3f2fd;
+  color: #1976d2;
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.severity-badge {
+  padding: 6px 14px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.severity-high {
+  background: #ffebee;
+  color: #c62828;
+}
+
+.severity-medium {
+  background: #fff3e0;
+  color: #ef6c00;
+}
+
+.severity-low {
+  background: #e8f5e9;
+  color: #2e7d32;
+}
+
+.status-badge {
+  padding: 6px 14px;
+  border-radius: 12px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  text-transform: capitalize;
+}
+
+.status-open {
+  background: #fff3e0;
+  color: #f57c00;
+}
+
+.status-progress {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.status-resolved {
+  background: #e8f5e9;
+  color: #388e3c;
+}
+
+.status-closed {
+  background: #f5f5f5;
+  color: #757575;
+}
+
+/* 🔘 BOTONES */
+.btn-view {
+  background: #667eea;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1.2rem;
+  transition: all 0.2s;
+}
+
+.btn-view:hover {
+  background: #5568d3;
+  transform: scale(1.1);
+}
+
+.no-data {
+  text-align: center;
+  padding: 40px !important;
+  color: #999;
+  font-size: 1.1rem;
+}
+
+.loading {
+  text-align: center;
+  padding: 60px;
+  font-size: 1.3rem;
+  color: #667eea;
+}
+
+/* 📱 RESPONSIVE */
+@media (max-width: 768px) {
+  .incident-list-header {
+    flex-direction: column;
+    gap: 15px;
+  }
+  
+  .table-container {
+    overflow-x: auto;
+  }
+  
+  .incidents-table {
+    font-size: 0.85rem;
+  }
+}

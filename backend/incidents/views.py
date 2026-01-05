@@ -1,386 +1,276 @@
 """
-🚨 VIEWS DE INCIDENTES - TESIS CIBERSEGURIDAD
+🛡️ VIEWS - TESIS CIBERSEGURIDAD
 Ryan Gallegos Mera - PUCESI
 Última actualización: 03 de Enero, 2026
 """
 
-from rest_framework import generics, status, filters
 from rest_framework.decorators import api_view, permission_classes
-from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
-from rest_framework.views import APIView
-from django.db.models import Count, Q, Avg
-from django.utils import timezone
-from datetime import timedelta
-
+from rest_framework.response import Response
+from rest_framework import status
 from .models import Incident
 from .serializers import IncidentSerializer
-from ia_classifier.classifier import IncidentClassifier
-from .virustotal_service import VirusTotalService
-from .gemini_service import GeminiService
+from .virustotal_service import VirusTotalService, analyze_with_gemini
+import json
+from ia_classifier.classifier import ThreatClassifier
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def create_incident(request):
+    """
+    Crear un nuevo incidente con análisis de VirusTotal + Gemini AI
+    """
+    try:
+        print(f"\n{'='*60}")
+        print(f"📝 CREANDO NUEVO INCIDENTE")
+        print(f"Usuario: {request.user.username}")
+        print(f"{'='*60}")
+        
+        data = request.data
+        
+        # Validar datos requeridos
+        if not data.get('incident_type'):
+            return Response({
+                'error': 'El tipo de incidente es requerido'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not data.get('description'):
+            return Response({
+                'error': 'La descripción es requerida'
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        # 1. Crear el incidente
+        incident = Incident.objects.create(
+            user=request.user,
+            incident_type=data['incident_type'],
+            description=data['description'],
+            url=data.get('url', ''),
+            status='Nuevo'
+        )
+        
+        print(f"✅ Incidente creado - ID: {incident.id}")
+        
+        # 2. Analizar con VirusTotal (si hay URL)
+        virustotal_result = None
+        if data.get('url'):
+            print(f"🔍 Analizando URL con VirusTotal...")
+            vt_service = VirusTotalService()
+            virustotal_result = vt_service.analyze_url(data['url'])
+            
+            # Guardar resultado en el incidente
+            incident.virustotal_analysis = json.dumps(virustotal_result)
+            print(f"✅ VirusTotal completado")
+        
+        # 3. Analizar con Gemini AI
+        print(f"🤖 Analizando con Gemini AI...")
+        gemini_result = analyze_with_gemini({
+            'incident_type': data['incident_type'],
+            'description': data['description'],
+            'url': data.get('url', ''),
+            'virustotal_result': virustotal_result
+        })
+        
+        # Guardar resultado de Gemini
+        incident.gemini_analysis = json.dumps(gemini_result)
+        
+        # Actualizar nivel de riesgo según Gemini
+        if gemini_result.get('risk_level'):
+            incident.risk_level = gemini_result['risk_level']
+        
+        # Actualizar confianza IA
+        if gemini_result.get('confidence'):
+            incident.ai_confidence = gemini_result['confidence']
+        
+        incident.save()
+        print(f"✅ Gemini AI completado")
+        print(f"{'='*60}\n")
+        
+        # 4. Serializar y retornar respuesta
+        serializer = IncidentSerializer(incident)
+        
+        return Response({
+            'success': True,
+            'message': 'Incidente creado y analizado correctamente',
+            'incident': serializer.data,
+            'virustotal': virustotal_result,
+            'gemini': gemini_result
+        }, status=status.HTTP_201_CREATED)
+        
+    except Exception as e:
+        print(f"❌ ERROR AL CREAR INCIDENTE: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        
+        return Response({
+            'error': f'Error al crear incidente: {str(e)}'
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-# ========================================
-# 🔥 GET INCIDENTES POR ROL
-# ========================================
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def get_my_incidents(request):
+def list_incidents(request):
     """
-    📊 Obtiene incidentes según el rol del usuario
+    Listar incidentes del usuario
     """
-    user = request.user
-    user_role = user.role
-    
-    print(f"\n{'='*60}")
-    print(f"🔍 GET MY INCIDENTS - Usuario: {user.username}, Rol: {user_role}")
-    print(f"{'='*60}")
-    
     try:
-        if user_role == 'admin':
+        user = request.user
+        
+        # Si es admin o analista, ver todos los incidentes
+        if user.role in ['admin', 'analyst']:
             incidents = Incident.objects.all().order_by('-created_at')
-            print(f"✅ Admin - {incidents.count()} incidentes totales")
-        
-        elif user_role == 'analyst':
-            incidents = Incident.objects.filter(assigned_to=user).order_by('-created_at')
-            print(f"✅ Analyst - {incidents.count()} incidentes asignados")
-        
-        elif user_role == 'employee':
-            incidents = Incident.objects.filter(reported_by=user).order_by('-created_at')
-            print(f"✅ Employee - {incidents.count()} incidentes reportados")
-            
-            if incidents.exists():
-                ids = [inc.id for inc in incidents]
-                print(f"   IDs encontrados: {ids}")
-        
         else:
-            print(f"❌ Rol no reconocido: {user_role}")
-            return Response(
-                {'error': 'Rol no reconocido'},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+            # Si es empleado, solo ver sus incidentes
+            incidents = Incident.objects.filter(user=user).order_by('-created_at')
         
-        print(f"📊 Intentando serializar {incidents.count()} incidentes...")
+        serializer = IncidentSerializer(incidents, many=True)
         
-        serializer = IncidentSerializer(incidents, many=True, context={'request': request})
+        return Response({
+            'success': True,
+            'incidents': serializer.data
+        }, status=status.HTTP_200_OK)
         
-        print(f"✅ Serialización exitosa - Retornando {len(serializer.data)} items")
-        print(f"{'='*60}\n")
-        
-        return Response(serializer.data, status=status.HTTP_200_OK)
-    
     except Exception as e:
-        print(f"❌ ERROR FATAL en get_my_incidents:")
-        print(f"   Tipo: {type(e).__name__}")
-        print(f"   Mensaje: {str(e)}")
-        import traceback
-        print(f"   Traceback completo:")
-        traceback.print_exc()
-        print(f"{'='*60}\n")
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_incident_detail(request, incident_id):
+    """
+    Obtener detalle de un incidente específico
+    """
+    try:
+        incident = Incident.objects.get(id=incident_id)
         
-        return Response(
-            {'error': f'Error al obtener incidentes: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
+        # Verificar permisos
+        if request.user.role not in ['admin', 'analyst'] and incident.user != request.user:
+            return Response({
+                'error': 'No tienes permiso para ver este incidente'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        serializer = IncidentSerializer(incident)
+        
+        # Parsear análisis JSON
+        virustotal_data = None
+        gemini_data = None
+        
+        if incident.virustotal_analysis:
+            try:
+                virustotal_data = json.loads(incident.virustotal_analysis)
+            except:
+                pass
+        
+        if incident.gemini_analysis:
+            try:
+                gemini_data = json.loads(incident.gemini_analysis)
+            except:
+                pass
+        
+        return Response({
+            'success': True,
+            'incident': serializer.data,
+            'virustotal': virustotal_data,
+            'gemini': gemini_data
+        }, status=status.HTTP_200_OK)
+        
+    except Incident.DoesNotExist:
+        return Response({
+            'error': 'Incidente no encontrado'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
 
-# ========================================
-# 📊 ENDPOINT DE ESTADÍSTICAS POR ROL
-# ========================================
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_incident_status(request, incident_id):
+    """
+    Actualizar estado de un incidente (solo analistas y admins)
+    """
+    try:
+        user = request.user
+        
+        # Verificar permisos
+        if user.role not in ['admin', 'analyst']:
+            return Response({
+                'error': 'No tienes permiso para actualizar incidentes'
+            }, status=status.HTTP_403_FORBIDDEN)
+        
+        incident = Incident.objects.get(id=incident_id)
+        
+        # Actualizar campos permitidos
+        if 'status' in request.data:
+            incident.status = request.data['status']
+        
+        if 'analyst_notes' in request.data:
+            incident.analyst_notes = request.data['analyst_notes']
+        
+        if 'assigned_to' in request.data:
+            incident.assigned_to = request.data['assigned_to']
+        
+        incident.save()
+        
+        serializer = IncidentSerializer(incident)
+        
+        return Response({
+            'success': True,
+            'message': 'Incidente actualizado correctamente',
+            'incident': serializer.data
+        }, status=status.HTTP_200_OK)
+        
+    except Incident.DoesNotExist:
+        return Response({
+            'error': 'Incidente no encontrado'
+        }, status=status.HTTP_404_NOT_FOUND)
+    except Exception as e:
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_dashboard_stats(request):
     """
-    📈 Obtiene estadísticas personalizadas por rol
+    Obtener estadísticas para el dashboard
     """
-    user = request.user
-    user_role = user.role
-    
     try:
-        if user_role == 'admin':
-            incidents = Incident.objects.all()
-        elif user_role == 'analyst':
-            incidents = Incident.objects.filter(assigned_to=user)
-        else:  # employee
-            incidents = Incident.objects.filter(reported_by=user)
+        user = request.user
         
+        # Si es admin/analista, ver todas las estadísticas
+        if user.role in ['admin', 'analyst']:
+            incidents = Incident.objects.all()
+        else:
+            # Si es empleado, solo sus estadísticas
+            incidents = Incident.objects.filter(user=user)
+        
+        # Contar por estado
         stats = {
-            'role': user_role,
             'total': incidents.count(),
-            'critical': incidents.filter(severity='critical').count(),
-            'high': incidents.filter(severity='high').count(),
-            'medium': incidents.filter(severity='medium').count(),
-            'low': incidents.filter(severity='low').count(),
-            'open': incidents.filter(status='new').count(),
-            'in_progress': incidents.filter(status='in_progress').count(),
-            'closed': incidents.filter(status='resolved').count(),
+            'nuevo': incidents.filter(status='Nuevo').count(),
+            'en_proceso': incidents.filter(status='En Proceso').count(),
+            'resuelto': incidents.filter(status='Resuelto').count(),
+            'cerrado': incidents.filter(status='Cerrado').count(),
         }
         
-        avg_confidence = incidents.aggregate(Avg('confidence'))['confidence__avg'] or 0
-        stats['average_confidence'] = round(avg_confidence * 100, 2)
+        # Contar por nivel de riesgo
+        stats['por_riesgo'] = {
+            'bajo': incidents.filter(risk_level='Bajo').count(),
+            'medio': incidents.filter(risk_level='Medio').count(),
+            'alto': incidents.filter(risk_level='Alto').count(),
+            'critico': incidents.filter(risk_level='Crítico').count(),
+        }
         
-        if user_role == 'admin':
-            from django.contrib.auth import get_user_model
-            User = get_user_model()
-            
-            stats['admin_extra'] = {
-                'total_users': User.objects.count(),
-                'total_analysts': User.objects.filter(role='analyst').count(),
-                'total_employees': User.objects.filter(role='employee').count(),
-                'critical_unresolved': incidents.filter(
-                    severity='critical',
-                    status__in=['new', 'in_progress']
-                ).count(),
-            }
+        return Response({
+            'success': True,
+            'stats': stats
+        }, status=status.HTTP_200_OK)
         
-        elif user_role == 'analyst':
-            stats['analyst_extra'] = {
-                'pending_review': incidents.filter(status='new').count(),
-                'assigned_to_me': incidents.filter(status='in_progress').count(),
-                'resolved_by_me': incidents.filter(status='resolved').count(),
-            }
-        
-        elif user_role == 'employee':
-            stats['employee_extra'] = {
-                'my_open': incidents.filter(status='new').count(),
-                'my_resolved': incidents.filter(status='resolved').count(),
-                'total_reported': incidents.count(),
-            }
-        
-        return Response(stats, status=status.HTTP_200_OK)
-    
     except Exception as e:
-        return Response(
-            {'error': f'Error: {str(e)}'},
-            status=status.HTTP_500_INTERNAL_SERVER_ERROR
-        )
-
-
-# ========================================
-# 🚨 CRUD BÁSICO
-# ========================================
-
-class IncidentListCreateView(generics.ListCreateAPIView):
-    """
-    GET: Lista incidentes
-    POST: Crea un nuevo incidente
-    """
-    serializer_class = IncidentSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        return Incident.objects.all().order_by('-created_at')
-
-    def perform_create(self, serializer):
-        """
-        🔥 ACTUALIZADO: IA Local + VirusTotal + Gemini
-        """
-        description = self.request.data.get('description', '')
-        url = self.request.data.get('url', '')
-        threat_type = self.request.data.get('threat_type', 'phishing')
-        
-        text_to_analyze = f"{url} {description}"
-        
-        print(f"\n{'='*60}")
-        print(f"🚨 CREANDO NUEVO INCIDENTE")
-        print(f"{'='*60}")
-        print(f"URL: {url}")
-        print(f"Descripción: {description}")
-        
-        # ✅ PASO 1: IA LOCAL
-        try:
-            classifier = IncidentClassifier()
-            result = classifier.classify(text_to_analyze, threat_type)
-            
-            if isinstance(result, tuple) and len(result) == 2:
-                severity, confidence = result
-            elif isinstance(result, tuple) and len(result) == 1:
-                severity = result[0]
-                confidence = 0.75
-            else:
-                severity = result
-                confidence = 0.75
-            
-            print(f"✅ IA LOCAL: {severity.upper()} ({round(confidence*100)}%)")
-        
-        except Exception as e:
-            print(f"⚠️ Error en IA local: {e}")
-            severity = 'medium'
-            confidence = 0.5
-        
-        # 🛡️ PASO 2: VIRUSTOTAL
-        virustotal_result = None
-        if url:
-            try:
-                vt_service = VirusTotalService()
-                vt_result = vt_service.analyze_url(url)
-                
-                if vt_result.get("success"):
-                    virustotal_result = vt_result
-                    detections = vt_result.get("detections", 0)
-                    total_engines = vt_result.get("total_engines", 0)
-                    
-                    print(f"🛡️ VIRUSTOTAL: {detections}/{total_engines} detecciones")
-                    
-                    # Ajustar severidad según detecciones
-                    if detections >= 5:
-                        severity = 'critical'
-                        confidence = 0.95
-                    elif detections >= 2:
-                        if severity not in ['critical']:
-                            severity = 'high'
-                            confidence = 0.85
-                    elif detections == 1:
-                        if severity == 'low':
-                            severity = 'medium'
-                        confidence = max(confidence, 0.75)
-                    else:
-                        # URL limpia según VirusTotal
-                        if severity == 'critical' and detections == 0:
-                            severity = 'high'
-                
-                else:
-                    virustotal_result = vt_result
-                    print(f"⚠️ VirusTotal: {vt_result.get('error', 'Error desconocido')}")
-            
-            except Exception as e:
-                print(f"❌ Error en VirusTotal: {e}")
-                virustotal_result = {
-                    'success': False,
-                    'error': str(e)
-                }
-        
-        # 🤖 PASO 3: GEMINI
-        gemini_analysis = None
-        try:
-            gemini_service = GeminiService()
-            gemini_result = gemini_service.analyze_incident(
-                description=description,
-                url=url,
-                threat_type=threat_type
-            )
-            
-            if gemini_result.get("success"):
-                gemini_analysis = gemini_result
-                print(f"🤖 GEMINI: Análisis contextual generado")
-            else:
-                gemini_analysis = gemini_result
-        
-        except Exception as e:
-            print(f"❌ Error en Gemini: {e}")
-            gemini_analysis = {
-                'success': False,
-                'explanation': 'Análisis contextual no disponible',
-                'patterns_detected': [],
-                'recommendation': 'Solicitar revisión manual'
-            }
-        
-        # 🔥 PASO 4: AUTO-ASIGNAR ANALISTA
-        from django.contrib.auth import get_user_model
-        User = get_user_model()
-        
-        try:
-            analyst = User.objects.filter(role='analyst', is_active=True).first()
-        except Exception:
-            analyst = None
-        
-        # 🎯 PASO 5: GUARDAR
-        incident = serializer.save(
-            reported_by=self.request.user,
-            severity=severity,
-            confidence=confidence,
-            assigned_to=analyst,
-            virustotal_result=virustotal_result,
-            gemini_analysis=gemini_analysis
-        )
-        
-        print(f"\n✅ INCIDENTE #{incident.id} CREADO:")
-        print(f"   Severidad: {severity.upper()} ({round(confidence*100)}%)")
-        print(f"   VirusTotal: {'✅' if virustotal_result and virustotal_result.get('success') else '❌'}")
-        print(f"   Gemini: {'✅' if gemini_analysis and gemini_analysis.get('success') else '❌'}")
-        print(f"{'='*60}\n")
-
-
-class IncidentDetailView(generics.RetrieveUpdateDestroyAPIView):
-    """
-    GET: Obtiene un incidente
-    PATCH: Actualiza un incidente
-    DELETE: Elimina un incidente
-    """
-    serializer_class = IncidentSerializer
-    permission_classes = [IsAuthenticated]
-
-    def get_queryset(self):
-        return Incident.objects.all()
-
-
-class DashboardStatsView(APIView):
-    """
-    📊 Estadísticas del dashboard
-    """
-    permission_classes = [IsAuthenticated]
-
-    def get(self, request):
-        user = request.user
-        user_role = user.role
-        
-        try:
-            if user_role == 'admin':
-                incidents = Incident.objects.all()
-            elif user_role == 'analyst':
-                incidents = Incident.objects.filter(assigned_to=user)
-            else:
-                incidents = Incident.objects.filter(reported_by=user)
-            
-            stats = {
-                'role': user_role,
-                'total': incidents.count(),
-                'critical': incidents.filter(severity='critical').count(),
-                'high': incidents.filter(severity='high').count(),
-                'medium': incidents.filter(severity='medium').count(),
-                'low': incidents.filter(severity='low').count(),
-                'open': incidents.filter(status='new').count(),
-                'in_progress': incidents.filter(status='in_progress').count(),
-                'closed': incidents.filter(status='resolved').count(),
-            }
-            
-            avg_confidence = incidents.aggregate(Avg('confidence'))['confidence__avg'] or 0
-            stats['average_confidence'] = round(avg_confidence * 100, 2)
-            
-            if user_role == 'admin':
-                from django.contrib.auth import get_user_model
-                User = get_user_model()
-                
-                stats['admin_extra'] = {
-                    'total_users': User.objects.count(),
-                    'total_analysts': User.objects.filter(role='analyst').count(),
-                    'total_employees': User.objects.filter(role='employee').count(),
-                    'critical_unresolved': incidents.filter(
-                        severity='critical',
-                        status__in=['new', 'in_progress']
-                    ).count(),
-                }
-            
-            elif user_role == 'analyst':
-                stats['analyst_extra'] = {
-                    'pending_review': incidents.filter(status='new').count(),
-                    'assigned_to_me': incidents.filter(status='in_progress').count(),
-                    'resolved_by_me': incidents.filter(status='resolved').count(),
-                }
-            
-            elif user_role == 'employee':
-                stats['employee_extra'] = {
-                    'my_open': incidents.filter(status='new').count(),
-                    'my_resolved': incidents.filter(status='resolved').count(),
-                    'total_reported': incidents.count(),
-                }
-            
-            return Response(stats, status=status.HTTP_200_OK)
-        
-        except Exception as e:
-            return Response(
-                {'error': f'Error: {str(e)}'},
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR
-            )
+        return Response({
+            'error': str(e)
+        }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

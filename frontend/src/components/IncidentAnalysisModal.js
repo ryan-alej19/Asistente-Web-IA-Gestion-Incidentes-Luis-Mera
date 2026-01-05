@@ -1,7 +1,12 @@
-import React from 'react';
+import React, { useState } from 'react';
 import './IncidentAnalysisModal.css';
 
 const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) => {
+  // Corregimos el uso de estados para que React controle los inputs
+  const [newStatus, setNewStatus] = useState(incident?.status || 'new');
+  const [notes, setNotes] = useState(incident?.notes || '');
+  const [loading, setLoading] = useState(false);
+
   if (!incident) return null;
 
   // Extraer datos de análisis
@@ -20,12 +25,44 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
   const geminiPatterns = geminiResult?.patterns_detected || [];
   const geminiRecommendation = geminiResult?.recommendation || '';
 
-  const handleStatusChange = (e) => {
-    const newStatus = e.target.value;
-    const notes = document.getElementById('analyst-notes')?.value || '';
-    
-    if (onStatusChange) {
-      onStatusChange(incident.id, newStatus, notes);
+  // 🔥 FUNCIÓN ACTUALIZADA (Sin usar document.getElementById)
+  const handleStatusChange = async () => {
+    if (!newStatus) {
+      alert('❌ Selecciona un estado');
+      return;
+    }
+
+    setLoading(true); // Bloqueamos el botón para evitar clics dobles
+    try {
+      const token = localStorage.getItem('access_token');
+      
+      const response = await fetch(`http://localhost:8000/api/incidents/${incident.id}/`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          notes: notes
+        })
+      });
+
+      if (response.ok) {
+        alert('✅ Estado actualizado correctamente');
+        if (onStatusChange) {
+          onStatusChange(incident.id, newStatus, notes);
+        }
+        onClose();
+      } else {
+        const error = await response.json();
+        alert(`❌ Error: ${error.detail || 'No se pudo actualizar'}`);
+      }
+    } catch (error) {
+      console.error('Error al actualizar estado:', error);
+      alert('❌ Error de conexión con el servidor');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -59,10 +96,9 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
       'medium': 'MEDIO',
       'low': 'BAJO'
     };
-    return texts[severity] || severity.toUpperCase();
+    return texts[severity] || severity?.toUpperCase() || 'DESCONOCIDO';
   };
 
-  // 🔥 DETERMINAR SI ES VISTA SIMPLE (EMPLOYEE) O COMPLETA (ANALYST/ADMIN)
   const isSimpleView = userRole === 'employee';
 
   return (
@@ -74,13 +110,11 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
         </div>
 
         <div className="modal-body">
-          
-          {/* ========================================== */}
-          {/* 👤 VISTA SIMPLE PARA EMPLOYEE */}
-          {/* ========================================== */}
           {isSimpleView ? (
+            /* ========================================== */
+            /* 👤 VISTA SIMPLE PARA EMPLOYEE              */
+            /* ========================================== */
             <>
-              {/* 🤖 ORIENTACIÓN PRINCIPAL */}
               <section className="simple-orientation">
                 <div className="orientation-header">
                   <span className="orientation-icon">🛡️</span>
@@ -95,7 +129,9 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
                   </span>
                 </div>
 
-                {geminiSuccess && (
+                {geminiExplanation && 
+                 !geminiExplanation.includes('No disponible') && 
+                 !geminiExplanation.includes('Error técnico') && (
                   <div className="simple-explanation">
                     <h4>📝 ¿Por qué es {incident.severity === 'high' || incident.severity === 'critical' ? 'peligroso' : 'sospechoso'}?</h4>
                     <p>{geminiExplanation}</p>
@@ -119,29 +155,42 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
                 <div className="simple-status">
                   <span className="status-icon">📊</span>
                   <div>
-                    <strong>Estado:</strong> {incident.status === 'new' ? 'En revisión por el equipo' : 
-                                              incident.status === 'in_progress' ? 'Siendo analizado' : 
-                                              'Resuelto'}
+                    <strong>Estado:</strong> {
+                      incident.status === 'new' ? 'En revisión por el equipo' : 
+                      incident.status === 'in_progress' ? 'Siendo analizado' : 
+                      'Resuelto'
+                    }
                   </div>
                 </div>
               </section>
 
-              {/* Información básica */}
               <section className="simple-info">
                 <h4>📋 Tu reporte</h4>
                 <p><strong>Descripción:</strong> {incident.description || 'Sin descripción'}</p>
                 {incident.reported_url && (
-                  <p><strong>URL:</strong> <span className="url-text">{incident.reported_url}</span></p>
+                  <p><strong>URL:</strong> <span className="url-text" style={{ wordBreak: 'break-all' }}>{incident.reported_url}</span></p>
+                )}
+                {incident.attached_file && (
+                  <p>
+                    <strong>Archivo:</strong>{' '}
+                    <a 
+                      href={`http://localhost:8000${incident.attached_file}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      style={{ color: '#3b82f6', textDecoration: 'underline' }}
+                    >
+                      📎 Descargar archivo adjunto
+                    </a>
+                  </p>
                 )}
                 <p><strong>Fecha:</strong> {new Date(incident.created_at).toLocaleString('es-EC')}</p>
               </section>
             </>
           ) : (
             /* ========================================== */
-            /* 🧠 VISTA COMPLETA PARA ANALYST/ADMIN */
+            /* 🧠 VISTA COMPLETA PARA ANALYST/ADMIN       */
             /* ========================================== */
             <>
-              {/* 📋 INFORMACIÓN DEL REPORTE */}
               <section className="info-section">
                 <h3>📋 Información del Reporte</h3>
                 <div className="info-grid">
@@ -167,16 +216,32 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
                 {incident.reported_url && (
                   <div className="info-item full-width">
                     <label>🔗 URL Reportada:</label>
-                    <p className="url-text">{incident.reported_url}</p>
+                    <p className="url-text" style={{ wordBreak: 'break-all', fontStyle: 'italic' }}>{incident.reported_url}</p>
+                  </div>
+                )}
+
+                {incident.attached_file && (
+                  <div className="info-item full-width">
+                    <label>📎 Archivo Adjunto:</label>
+                    <a 
+                      href={`http://localhost:8000${incident.attached_file}`} 
+                      target="_blank" 
+                      rel="noopener noreferrer"
+                      className="url-text"
+                      style={{ color: '#3b82f6', textDecoration: 'underline' }}
+                    >
+                      Descargar archivo ({incident.attached_file.split('/').pop()})
+                    </a>
                   </div>
                 )}
               </section>
 
               {/* 🤖 ANÁLISIS GEMINI */}
-              {geminiSuccess && (
+{((geminiExplanation && !geminiExplanation.includes('No disponible') && !geminiExplanation.includes('Error técnico')) || 
+  geminiPatterns.length > 0 || 
+  (geminiRecommendation && !geminiRecommendation.includes('análisis manual'))) && (
                 <section className="analysis-section gemini-section">
                   <h3>🤖 Análisis Contextual (Gemini AI)</h3>
-                  
                   {geminiPatterns.length > 0 && (
                     <div className="gemini-patterns">
                       <h4>🔍 Patrones Detectados:</h4>
@@ -187,23 +252,22 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
                       </ul>
                     </div>
                   )}
-
-                  <div className="gemini-explanation">
-                    <h4>📝 Explicación:</h4>
-                    <p style={{ whiteSpace: 'pre-wrap' }}>{geminiExplanation}</p>
-                  </div>
-
+                  {geminiExplanation && !geminiExplanation.includes('No disponible') && (
+                    <div className="gemini-explanation">
+                      <h4>📝 Explicación:</h4>
+                      <p style={{ whiteSpace: 'pre-wrap' }}>{geminiExplanation}</p>
+                    </div>
+                  )}
                   <div className="gemini-recommendation">
                     <h4>💡 Recomendación:</h4>
-                    <p>{geminiRecommendation}</p>
+                    <p>{geminiRecommendation || 'Solicitar revisión manual del analista'}</p>
                   </div>
                 </section>
               )}
 
-              {/* 🛡️ ANÁLISIS VIRUSTOTAL */}
+              {/* 🛡️ VIRUSTOTAL */}
               <section className="analysis-section virustotal-section">
                 <h3>🛡️ Análisis VirusTotal</h3>
-                
                 {vtSuccess ? (
                   <>
                     <div className="vt-stats">
@@ -224,14 +288,8 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
                         <span className="vt-value safe">{vtTotal - vtDetections}</span>
                       </div>
                     </div>
-
                     {vtUrl && (
-                      <a 
-                        href={vtUrl} 
-                        target="_blank" 
-                        rel="noopener noreferrer"
-                        className="vt-link"
-                      >
+                      <a href={vtUrl} target="_blank" rel="noopener noreferrer" className="vt-link">
                         📊 Ver análisis completo en VirusTotal →
                       </a>
                     )}
@@ -247,41 +305,9 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
                 )}
               </section>
 
-              {/* 🤖 ANÁLISIS AUTOMÁTICO (IA LOCAL) */}
-              <section className="analysis-section ia-section">
-                <h3>🤖 Análisis Automático (IA Local)</h3>
-                
-                <div className="analysis-grid">
-                  <div className="analysis-card">
-                    <label>Severidad</label>
-                    <span 
-                      className="severity-badge"
-                      style={{ backgroundColor: getSeverityColor(incident.severity) }}
-                    >
-                      {getSeverityText(incident.severity)}
-                    </span>
-                  </div>
-
-                  <div className="analysis-card">
-                    <label>Confianza IA</label>
-                    <span className="confidence-value">
-                      {Math.round((incident.confidence || 0) * 100)}%
-                    </span>
-                  </div>
-
-                  <div className="analysis-card full-width">
-                    <label>Tipo de Amenaza</label>
-                    <span className="threat-type">
-                      {getThreatTypeLabel(incident.threat_type)}
-                    </span>
-                  </div>
-                </div>
-              </section>
-
               {/* ⚙️ GESTIÓN DE ESTADO */}
               <section className="status-section">
                 <h3>⚙️ Gestión de Estado</h3>
-                
                 <div className="status-info">
                   <label>Estado Actual:</label>
                   <span className={`status-badge status-${incident.status}`}>
@@ -295,8 +321,8 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
                   <label htmlFor="status-select">Cambiar a:</label>
                   <select 
                     id="status-select"
-                    defaultValue={incident.status}
-                    onChange={handleStatusChange}
+                    value={newStatus}
+                    onChange={(e) => setNewStatus(e.target.value)}
                   >
                     <option value="new">Nuevo</option>
                     <option value="in_progress">En Progreso</option>
@@ -308,8 +334,9 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
                   <label htmlFor="analyst-notes">Notas del Analista:</label>
                   <textarea
                     id="analyst-notes"
+                    value={notes}
+                    onChange={(e) => setNotes(e.target.value)}
                     placeholder="Ej: Verificado con VirusTotal - URL legítima confirmada..."
-                    defaultValue={incident.notes || ''}
                     rows="4"
                   />
                 </div>
@@ -317,8 +344,9 @@ const IncidentAnalysisModal = ({ incident, onClose, onStatusChange, userRole }) 
                 <button 
                   className="btn-update"
                   onClick={handleStatusChange}
+                  disabled={loading}
                 >
-                  ✅ Actualizar Estado
+                  {loading ? '⏳ Actualizando...' : '✅ Actualizar Estado'}
                 </button>
               </section>
             </>

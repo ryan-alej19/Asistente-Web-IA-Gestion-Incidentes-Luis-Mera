@@ -51,6 +51,14 @@ class Incident(models.Model):
     Almacena reportes de incidentes detectados o reportados por usuarios
     """
     
+    # 🔥 NUEVO CAMPO para archivos
+    attached_file = models.FileField(
+        upload_to='incident_files/',
+        null=True,
+        blank=True,
+        help_text='Archivo adjunto (captura, PDF, etc.)'
+    )
+
     # Estados posibles del incidente
     STATUS_CHOICES = [
         ('new', 'Nuevo'),
