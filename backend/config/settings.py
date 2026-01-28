@@ -1,10 +1,12 @@
-# settings.py - CONFIGURACIÓN COMPLETA Y CORRECTA
+# Configuración principal de Django
+
 
 import os
 from pathlib import Path
 from datetime import timedelta
 
 from dotenv import load_dotenv
+import dj_database_url
 
 # Build paths inside the project
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -12,17 +14,20 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
 
-#  CARGAR VARIABLES DE ENTORNO DESDE .env
+# Cargar variables de entorno
+
 load_dotenv(os.path.join(BASE_DIR, '.env'))
 
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-default-fallback-key')
 
-# Development mode (solo para probar local)
-DEBUG = True
+# Modo de depuración (False por defecto en producción)
 
-# Permitir estas URLs para acceso
-ALLOWED_HOSTS = ['localhost', '127.0.0.1', '*']
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
+
+# Hosts permitidos
+
+ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
 
 # Application definition
 INSTALLED_APPS = [
@@ -34,19 +39,21 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     
     
-    # Apps de terceros
-    'rest_framework',           # ← UNA SOLA VEZ
-    'django_filters',           # ← UNA SOLA VEZ
+    # Dependencias de terceros
+    'rest_framework',
+    'django_filters',
     'corsheaders',
     'rest_framework_simplejwt',
     
-    # Tu app
+    # Aplicaciones locales
+
     'incidents',
 ]
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # ← DEBE SER PRIMERO
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -75,15 +82,13 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# ╔════════════════════════════════════════════════════════════════════╗
-# ║ DATABASE CONFIGURATION                                             ║
-# ╚════════════════════════════════════════════════════════════════════╝
+# Configuración de base de datos
 
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f'sqlite:///{BASE_DIR / "db.sqlite3"}',
+        conn_max_age=600
+    )
 }
 
 # Password validation
@@ -102,11 +107,10 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-# ╔════════════════════════════════════════════════════════════════════╗
-# ║ CUSTOM USER MODEL                                                  ║
-# ╚════════════════════════════════════════════════════════════════════╝
+# Modelo de usuario personalizado
 
-AUTH_USER_MODEL = 'incidents.CustomUser'  # ← IMPORTANTE PARA LA TESIS
+
+AUTH_USER_MODEL = 'incidents.CustomUser'
 
 # Internationalization
 LANGUAGE_CODE = 'es-ec'
@@ -117,6 +121,7 @@ USE_TZ = True
 # Static files
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Media files
 MEDIA_URL = '/media/'
@@ -124,16 +129,22 @@ MEDIA_ROOT = BASE_DIR / 'media'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ╔════════════════════════════════════════════════════════════════════╗
-# ║ CORS CONFIGURATION                                                ║
-# ╚════════════════════════════════════════════════════════════════════╝
+# Configuración CORS
 
-CORS_ALLOWED_ORIGINS = [
+
+# URLs para desarrollo local
+CORS_ALLOWED_ORIGINS_LOCAL = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://127.0.0.1:3000",
     "http://127.0.0.1:3001",
 ]
+
+# URLs de producción (desde variable de entorno)
+CORS_ALLOWED_ORIGINS_PROD = os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if os.getenv('CORS_ALLOWED_ORIGINS') else []
+
+# Combinar ambas listas
+CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_LOCAL + [origin for origin in CORS_ALLOWED_ORIGINS_PROD if origin.strip()]
 
 CORS_ALLOW_ALL_METHODS = True
 CORS_ALLOW_CREDENTIALS = True
@@ -149,9 +160,8 @@ CORS_ALLOW_HEADERS = [
     'x-requested-with',
 ]
 
-# ╔════════════════════════════════════════════════════════════════════╗
-# ║ REST FRAMEWORK CONFIGURATION                                      ║
-# ╚════════════════════════════════════════════════════════════════════╝
+# Configuración Django Rest Framework
+
 
 REST_FRAMEWORK = {
     'DEFAULT_FILTER_BACKENDS': [
@@ -170,9 +180,8 @@ REST_FRAMEWORK = {
     ],
 }
 
-# ╔════════════════════════════════════════════════════════════════════╗
-# ║ JWT CONFIGURATION - Simple JWT                                    ║
-# ╚════════════════════════════════════════════════════════════════════╝
+# Configuración JWT (Simple JWT)
+
 
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
@@ -207,14 +216,12 @@ LOGGING = {
         'level': 'INFO',
     },
 }
-# ==========================================
-#  VIRUSTOTAL API CONFIGURATION
-# ==========================================
+# Clave API VirusTotal
+
 VIRUSTOTAL_API_KEY = os.getenv('VIRUSTOTAL_API_KEY', '')
 
-# ==========================================
-#  GEMINI API CONFIGURATION
-# ==========================================
+# Clave API Google Gemini
+
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 # Al final del archivo
 MEDIA_URL = '/media/'
