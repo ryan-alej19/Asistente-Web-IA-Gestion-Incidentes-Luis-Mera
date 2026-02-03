@@ -1,719 +1,488 @@
-
-import React, { useState, useEffect, useCallback } from 'react';
-import { useAuth } from '../context/AuthContext';
-import { useNavigate } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { Icons } from '../components/Icons';
-import BusinessBrand from '../components/BusinessBrand';
-import { debounce } from 'lodash';
+import { useNavigate } from 'react-router-dom';
 
-// --- COMPONENTS ---
-
-// Skeleton Loader for AI Panel
-const SkeletonLoader = () => (
-  <div className="space-y-4 animate-pulse">
-    <div className="h-4 bg-slate-200 rounded w-3/4"></div>
-    <div className="h-20 bg-slate-200 rounded"></div>
-    <div className="space-y-2">
-      <div className="h-3 bg-slate-200 rounded w-5/6"></div>
-      <div className="h-3 bg-slate-200 rounded w-4/6"></div>
-    </div>
-  </div>
-);
-
-// 1. History Item Component (Dark/Unified Sidebar)
-const HistoryItem = ({ incident, isSelected, onClick }) => {
-  const getSeverityStyle = (sev) => {
-    switch (sev) {
-      case 'critical': return 'bg-red-500 ring-red-900/50';
-      case 'high': return 'bg-orange-500 ring-orange-900/50';
-      case 'medium': return 'bg-yellow-500 ring-yellow-900/50';
-      default: return 'bg-green-500 ring-green-900/50';
-    }
-  };
-
-  return (
-    <div
-      onClick={onClick}
-      className={`group p-4 mb-2 rounded-lg cursor-pointer transition-all border border-l-4 ${isSelected
-        ? 'bg-slate-800 border-indigo-500 shadow-lg shadow-black/20'
-        : 'bg-slate-900/50 border-transparent border-l-slate-700 hover:bg-slate-800 hover:border-l-indigo-400'
-        }`}
-    >
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ring-2 ${getSeverityStyle(incident.severity)}`}></span>
-          <span className="text-[10px] font-bold uppercase text-slate-400 tracking-wider">
-            {incident.severity || 'UNKNOWN'}
-          </span>
-        </div>
-        <span className="text-[10px] text-slate-500 font-mono">
-          {new Date(incident.created_at).toLocaleDateString()}
-        </span>
-      </div>
-      <h4 className={`text-sm font-bold line-clamp-1 mb-1 ${isSelected ? 'text-white' : 'text-slate-300 group-hover:text-white'}`}>
-        {incident.title}
-      </h4>
-      <p className="text-xs text-slate-500 line-clamp-1 group-hover:text-slate-400">
-        {incident.description}
-      </p>
-    </div>
-  );
-};
-
-// 1. VirusTotal Gauge Component
-const VirusTotalGauge = ({ malicious, total, error, className = "" }) => {
-  if (error) {
-    const isAuthError = error.includes('401') || error.includes('Credenciales');
-    return (
-      <div className={`flex flex-col items-center justify-center p-4 bg-slate-900 rounded-xl border border-slate-700 ${className}`}>
-        <div className="relative w-24 h-24 flex items-center justify-center">
-          <svg className="w-full h-full transform -rotate-90">
-            <circle cx="48" cy="48" r="36" stroke="currentColor" strokeWidth="4" fill="transparent" className="text-slate-800" />
-            <circle cx="48" cy="48" r="36" stroke="currentColor" strokeWidth="4" fill="transparent" strokeDasharray="150" strokeDashoffset={100} className={isAuthError ? "text-amber-500" : "text-slate-500"} strokeLinecap="round" />
-          </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-            <Icons.Lock className={`h-6 w-6 mb-1 ${isAuthError ? "text-amber-400" : "text-slate-400"}`} />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
-              {isAuthError ? 'AUTH' : 'ERR'}
-            </span>
-          </div>
-        </div>
-        <div className="mt-2 text-center">
-          <h4 className="text-[9px] font-bold text-slate-500 uppercase tracking-widest">External Feed</h4>
-          <div className={`text-[10px] font-mono font-bold mt-1 px-3 py-1 rounded-full border ${isAuthError ? 'bg-amber-900/20 text-amber-400 border-amber-900/50' : 'bg-slate-800 text-slate-400 border-slate-700'}`}>
-            {isAuthError ? 'UNAUTHORIZED' : 'OFFLINE'}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const radius = 36;
-  const circumference = 2 * Math.PI * radius;
-
-  const isClean = malicious === 0;
-  const colorClass = isClean ? 'text-emerald-500' : 'text-red-500';
-  const bgColorClass = isClean ? 'text-emerald-900/20' : 'text-red-900/20';
-
-  return (
-    <div className={`flex flex-col items-center justify-center p-4 bg-slate-900 rounded-xl ${className}`}>
-      <div className="relative w-24 h-24 flex items-center justify-center">
-        <svg className="w-full h-full transform -rotate-90">
-          <circle cx="48" cy="48" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" className={bgColorClass} />
-          <circle cx="48" cy="48" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray={circumference} strokeDashoffset={0} className={colorClass} strokeLinecap="round" />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-white">
-          <span className={`text-2xl font-bold ${isClean ? 'text-emerald-400' : 'text-red-400'}`}>
-            {malicious}
-          </span>
-          <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">
-            / {total}
-          </span>
-        </div>
-      </div>
-      <div className="mt-2 text-center">
-        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Community Score</h4>
-        <div className={`text-xs font-mono font-bold mt-1 px-2 py-0.5 rounded-full ${isClean ? 'bg-emerald-500/10 text-emerald-400' : 'bg-red-500/10 text-red-400'}`}>
-          {isClean ? 'CLEAN' : 'MALICIOUS'}
-        </div>
-      </div>
-    </div>
-  );
-};
-
-// 2. AI Analysis Panel (Right Column)
-const AIAnalysisPanel = ({ isAnalyzing, analysisData, incidentCount, virustotalData }) => {
-  const [showTechnical, setShowTechnical] = useState(true); // Default valid 'chevere' context visible
-
-  if (isAnalyzing) {
-    return (
-      <div className="p-6 space-y-6">
-        <div className="flex items-center gap-2 text-indigo-600 font-bold text-sm uppercase tracking-wide animate-pulse">
-          <Icons.Refresh className="h-4 w-4 animate-spin" />
-          Analizando...
-        </div>
-        <SkeletonLoader />
-      </div>
-    );
-  }
-
-  if (!analysisData && !virustotalData) {
-    return (
-      <div className="h-full flex flex-col justify-between p-6 bg-slate-50">
-        <div className="text-center mt-10">
-          <div className="inline-flex items-center justify-center p-4 bg-white rounded-full shadow-sm mb-4">
-            <Icons.Brain className="h-8 w-8 text-indigo-400" />
-          </div>
-          <h3 className="text-sm font-bold text-slate-800">Asistente de Ciberseguridad</h3>
-          <p className="text-xs text-slate-500 mt-2 leading-relaxed px-4">
-            Escriba los detalles o suba un archivo. La IA analizará riesgos, detectará malware y explicará por qué es sospechoso.
-          </p>
-        </div>
-
-        {/* Educational Content */}
-        <div className="space-y-6 border-t border-slate-200 pt-6">
-          <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
-            <h4 className="text-xs font-bold text-slate-700 uppercase mb-2">💡 Tips de Seguridad</h4>
-            <ul className="text-xs text-slate-600 space-y-2 list-disc list-inside">
-              <li>Verifica siempre el remitente de los correos.</li>
-              <li>No abras adjuntos no solicitados.</li>
-              <li>Reporta cualquier comportamiento extraño.</li>
-            </ul>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="p-6 space-y-6 animate-fade-in pb-20">
-
-      {/* VIRUSTOTAL GAUGE (Top Priority) */}
-      {virustotalData && (
-        <div className="mb-4">
-          <div className="flex justify-between items-center mb-2 px-1">
-            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">VIRUSTOTAL</span>
-            {virustotalData.permalink && (
-              <a
-                href={virustotalData.permalink}
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 text-[10px] font-bold text-indigo-500 hover:text-indigo-600 hover:underline"
-              >
-                <Icons.Link className="h-3 w-3" /> Ver Reporte Oficial
-              </a>
-            )}
-          </div>
-          <VirusTotalGauge
-            malicious={virustotalData.malicious}
-            total={virustotalData.total_engines}
-            error={virustotalData.success === false ? (virustotalData.error || 'Error VT') : null}
-          />
-        </div>
-      )}
-
-      {/* GEMINI AI RESULTS MAIN CARD */}
-      {analysisData && (
-        <>
-          <div className="flex items-center justify-between border-b border-slate-100 pb-4">
-            <h3 className="flex items-center gap-2 font-bold text-slate-800 text-sm">
-              <Icons.Brain className="h-5 w-5 text-indigo-600" />
-              Análisis Inteligente
-            </h3>
-            <span className="text-xs bg-indigo-50 text-indigo-700 px-2 py-1 rounded font-bold">
-              {(analysisData.confidence || analysisData.ai_confidence * 100 || 0).toFixed(0)}% Confianza
-            </span>
-          </div>
-
-          {/* Risk Score */}
-          <div className={`p-5 rounded-xl border-l-4 shadow-sm ${(analysisData.risk_level === 'ALTO' || analysisData.risk_level === 'critical') ? 'bg-red-50 border-red-500' :
-            (analysisData.risk_level === 'MEDIO' || analysisData.risk_level === 'high') ? 'bg-orange-50 border-orange-500' :
-              'bg-green-50 border-green-500'
-            }`}>
-            <div className="flex items-center gap-2 mb-2">
-              {(analysisData.risk_level === 'ALTO' || analysisData.risk_level === 'critical')
-                ? <Icons.Alert className="h-5 w-5 text-red-600" />
-                : <Icons.Check className="h-5 w-5 text-green-600" />
-              }
-              <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Nivel de Riesgo</span>
-            </div>
-            <div className="text-2xl font-black capitalize text-slate-900 mb-2">
-              {analysisData.risk_level}
-            </div>
-            <p className="text-sm text-slate-700 leading-relaxed font-medium">
-              {analysisData.explanation || analysisData.simple_explanation || analysisData.analysis}
-            </p>
-
-            {/* VIRUSTOTAL MINI PREVIEW */}
-            {virustotalData && (
-              <div className="mt-4 pt-3 border-t border-slate-200/60 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Icons.Shield className="h-4 w-4 text-blue-500" />
-                  <span className="text-xs font-bold text-slate-600">VirusTotal Preview:</span>
-                </div>
-                <div className={`text-xs font-bold px-2 py-0.5 rounded ${virustotalData.malicious > 0 ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>
-                  {virustotalData.malicious > 0 ? `${virustotalData.malicious} Maliciosos` : 'Limpio'}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Technical Context (Styled Chevere) */}
-          {(analysisData.technical_context || analysisData.contexto_tecnico) && (
-            <div className="bg-indigo-50/50 rounded-xl border border-indigo-100 overflow-hidden shadow-sm">
-              <button
-                onClick={() => setShowTechnical(!showTechnical)}
-                className="w-full flex justify-between items-center p-3 text-xs font-bold text-indigo-800 uppercase hover:bg-indigo-100/50 transition-colors"
-              >
-                <span className="flex items-center gap-2">
-                  <Icons.Search className="h-4 w-4 text-indigo-500" /> Contexto Técnico
-                </span>
-                <Icons.ChevronDown className={`h-4 w-4 text-indigo-400 transition-transform ${showTechnical ? 'rotate-180' : ''}`} />
-              </button>
-              {showTechnical && (
-                <div className="p-4 pt-0 text-xs text-indigo-900/80 leading-relaxed font-medium">
-                  {analysisData.technical_context || analysisData.contexto_tecnico}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Indicators Detected (Tags Style) */}
-          <div>
-            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-3">Indicadores Detectados</h4>
-            {(analysisData.indicators || analysisData.indicadores || []).length > 0 ? (
-              <div className="flex flex-wrap gap-2">
-                {(analysisData.indicators || analysisData.indicadores).map((ind, i) => (
-                  <span key={i} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                    <Icons.Link className="h-3 w-3 text-slate-400" />
-                    {ind}
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="text-xs text-slate-400 italic">
-                No se detectaron indicadores específicos.
-              </p>
-            )}
-          </div>
-
-          {/* Recommendations & VT Summary */}
-          {(analysisData.recommendations || analysisData.recommended_action) && (
-            <div className="bg-slate-800 text-white p-4 rounded-xl shadow-lg shadow-slate-200">
-              <h4 className="flex items-center gap-2 text-xs font-bold text-indigo-300 uppercase mb-2">
-                <Icons.Shield className="h-4 w-4" /> Recomendación
-              </h4>
-              <p className="text-sm font-medium leading-relaxed opacity-90 mb-2">
-                {Array.isArray(analysisData.recommendations)
-                  ? analysisData.recommendations.join(" ")
-                  : (analysisData.recommendations || analysisData.recommended_action)}
-              </p>
-              {virustotalData && virustotalData.malicious > 0 && (
-                <div className="mt-2 pt-2 border-t border-slate-700 text-[10px] text-red-300 flex items-center gap-1">
-                  <Icons.Alert className="h-3 w-3" />
-                  <span>VirusTotal detectó {virustotalData.malicious} amenazas confirmadas.</span>
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )
-      }
-    </div >
-  );
-};
-
-
-// 3. Main Dashboard Component
 const EmployeeDashboard = () => {
-  // Hooks
-  const { user, logout } = useAuth();
   const navigate = useNavigate();
-
-  // State
-  const [incidents, setIncidents] = useState([]);
-  const [selectedIncident, setSelectedIncident] = useState(null); // Null = New Report Mode
-  const [showMobileSidebar, setShowMobileSidebar] = useState(false);
-
-  // Form State
-  const [form, setForm] = useState({ url: '', description: '' });
+  const [analysisType, setAnalysisType] = useState('url'); // url | file
+  const [url, setUrl] = useState('');
   const [attachedFile, setAttachedFile] = useState(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [loadingText, setLoadingText] = useState(''); // NEW: Dynamic Loading Text
-  const [submitSuccess, setSubmitSuccess] = useState(false);
-  const [submitError, setSubmitError] = useState('');
+  const [description, setDescription] = useState('');
+  const [urlTimeout, setUrlTimeout] = useState(null);
 
-  // AI Analysis State
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [realTimeAnalysis, setRealTimeAnalysis] = useState(null);
-  const [realTimeVT, setRealTimeVT] = useState(null);
+  // Analysis State
+  const [analyzing, setAnalyzing] = useState(false);
+  const [analysisResult, setAnalysisResult] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  // Initial Load
-  useEffect(() => {
-    fetchIncidents();
-  }, []);
-
-  const fetchIncidents = async () => {
-    try {
-      const token = localStorage.getItem('access_token');
-      const res = await axios.get('http://localhost:8000/api/incidents/', {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setIncidents(res.data.incidents || []);
-    } catch (error) {
-      console.error("Error fetching incidents:", error);
-    }
-  };
-
-  // --- REAL TIME ANALYSIS LOGIC ---
-  const debouncedAnalyze = useCallback(
-    debounce(async (text, url) => {
-      if ((!text || text.length < 10) && !url) {
-        setRealTimeAnalysis(null);
-        setRealTimeVT(null);
-        setIsAnalyzing(false);
-        return;
-      }
-
-      setIsAnalyzing(true);
-      try {
-        const token = localStorage.getItem('access_token');
-        const res = await axios.post('http://localhost:8000/api/incidents/analyze/', {
-          description: text,
-          url: url
-        }, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-
-        // ALWAYS set VT result, even if success=false (e.g. 401 error)
-        if (res.data.virustotal) {
-          setRealTimeVT(res.data.virustotal);
-        } else {
-          setRealTimeVT(null);
-        }
-
-        if (res.data.success) {
-          setRealTimeAnalysis(res.data.analysis);
-        }
-      } catch (err) {
-        console.error("Analysis failed:", err);
-      } finally {
-        setIsAnalyzing(false);
-      }
-    }, 1200),
-    []
-  );
-
-  const handleInputChange = (e) => {
-    const { name, value } = e.target;
-    const newForm = { ...form, [name]: value };
-    setForm(newForm);
-    if (submitSuccess) setSubmitSuccess(false);
-    if (name === 'description' || name === 'url') {
-      debouncedAnalyze(newForm.description, newForm.url);
-    }
+  const handleLogout = () => {
+    localStorage.clear();
+    window.location.href = '/login';
   };
 
   const handleFileChange = (e) => {
-    if (e.target.files[0]) setAttachedFile(e.target.files[0]);
+    if (e.target.files && e.target.files[0]) {
+      setAttachedFile(e.target.files[0]);
+      setAnalysisResult(null);
+    }
   };
 
-  // Submit Report with Dynamic States
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setLoadingText('Iniciando carga...');
-    setSubmitError('');
+  const handleUrlChange = (e) => {
+    const newUrl = e.target.value;
+    setUrl(newUrl);
 
-    if (!form.url && !form.description && !attachedFile) {
-      setSubmitError('Ingrese información válida para el reporte.');
-      setIsSubmitting(false);
-      return;
+    // Si es URL válida, analizar automáticamente después de 1 segundo
+    if (newUrl && newUrl.includes('.')) {
+      if (urlTimeout) clearTimeout(urlTimeout);
+
+      const timeout = setTimeout(() => {
+        // Llamada directa a analizar (debemos asegurar que use la nueva URL)
+        // Como handleAnalyze usa el estado 'url', y setUrl es async, 
+        // pasamos la url explícitamente o dependemos del re-render.
+        // Para evitar problemas de closure, mejor usamos una función dedicada o useEffect,
+        // pero aquí simularemos el click en "Analizar".
+        // Mejor opción: llamar a una versión modificada de analizar recibiendo argumento
+        // O simplemente confiar en que el usuario dejará de escribir.
+        // Vamos a llamar a analyzeUrlDirect(newUrl)
+        analyzeUrlDirect(newUrl);
+      }, 1000);
+
+      setUrlTimeout(timeout);
     }
+  };
 
-    // Dynamic Text Cycle
-    const loadingMessages = [
-      'Subiendo contenido...',
-      'Consultando VirusTotal...',
-      'Analizando con Gemini AI...',
-      'Generando reporte final...'
-    ];
-    let msgIndex = 0;
-    const intervalId = setInterval(() => {
-      setLoadingText(loadingMessages[msgIndex]);
-      msgIndex = (msgIndex + 1) % loadingMessages.length;
-    }, 2000); // Change every 2s
+  const analyzeUrlDirect = async (urlToAnalyze) => {
+    if (!urlToAnalyze) return;
+    setAnalyzing(true);
+    setAnalysisResult(null);
+    try {
+      const token = localStorage.getItem('token');
+      const config = { headers: { Authorization: `Token ${token}` } };
+      const res = await axios.post('http://localhost:8000/api/incidents/analyze-url-preview/', { url: urlToAnalyze }, config);
+      setAnalysisResult(res.data);
+    } catch (err) {
+      console.error(err);
+      // No alertar en auto-análisis para no molestar
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleAnalyze = async () => {
+    if (analysisType === 'url' && !url) return;
+    if (analysisType === 'file' && !attachedFile) return;
+
+    setAnalyzing(true);
+    setAnalysisResult(null);
 
     try {
-      const token = localStorage.getItem('access_token');
-      const formData = new FormData();
+      const token = localStorage.getItem('token');
+      const config = { headers: { Authorization: `Token ${token}` } };
 
-      const title = form.url
-        ? `Web: ${new URL(form.url).hostname}`
-        : attachedFile ? `Archivo: ${attachedFile.name}` : `Reporte ${new Date().toLocaleDateString()}`;
-
-      formData.append('title', title);
-      formData.append('description', form.description);
-      formData.append('url', form.url);
-      formData.append('incident_type', 'phishing');
-      if (attachedFile) formData.append('attached_file', attachedFile);
-
-      const res = await axios.post('http://localhost:8000/api/incidents/create/', formData, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-
-      clearInterval(intervalId); // Stop cycle
-      setLoadingText('¡Completado!');
-
-      setSubmitSuccess(true);
-      setForm({ url: '', description: '' });
-      setAttachedFile(null);
-      setRealTimeAnalysis(null);
-      setRealTimeVT(null);
-      fetchIncidents(); // Refresh history
-
-      // Auto-open the new incident
-      // Auto-open - Ensure state updates don't clash
-      if (res.data.incident) {
-        // Small timeout to allow list refresh to stabilize
-        setTimeout(() => {
-          setSelectedIncident(res.data.incident);
-        }, 100);
+      let res;
+      if (analysisType === 'url') {
+        res = await axios.post('http://localhost:8000/api/incidents/analyze-url-preview/', { url }, config);
+      } else {
+        const formData = new FormData();
+        formData.append('file', attachedFile);
+        res = await axios.post('http://localhost:8000/api/incidents/analyze-file-preview/', formData, config);
       }
-
-      setTimeout(() => setSubmitSuccess(false), 5000);
-
+      setAnalysisResult(res.data);
     } catch (err) {
-      clearInterval(intervalId);
-      console.error("Submission failed:", err);
-      setSubmitError('Error al procesar reporte. Intente nuevamente.');
+      console.error(err);
+      alert('Error al analizar. Intente nuevamente.');
     } finally {
-      setIsSubmitting(false);
-      setLoadingText('');
+      setAnalyzing(false);
     }
   };
 
-  const handleNewReportClick = () => {
-    setSelectedIncident(null);
-    setRealTimeAnalysis(null);
-    setRealTimeVT(null);
+  const handleSubmitIncident = async () => {
+    setSubmitting(true);
+    try {
+      const token = localStorage.getItem('token');
+      const formData = new FormData();
+      formData.append('incident_type', analysisType);
+      formData.append('description', description);
+      if (analysisType === 'url') formData.append('url', url);
+      if (analysisType === 'file') formData.append('file', attachedFile);
+
+      await axios.post('http://localhost:8000/api/incidents/create/', formData, {
+        headers: {
+          Authorization: `Token ${token}`,
+          'Content-Type': 'multipart/form-data'
+        }
+      });
+
+      alert('Incidente reportado exitosamente. El equipo de seguridad lo revisará.');
+      setAnalysisResult(null);
+      setUrl('');
+      setAttachedFile(null);
+      setDescription('');
+    } catch (err) {
+      console.error(err);
+      alert('Error al reportar incidente.');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
-    <div className="flex h-screen bg-slate-900 font-sans text-slate-100 overflow-hidden">
+    <div className="min-h-screen bg-slate-900 flex font-sans">
+      {/* FORMULARIO - IZQUIERDA (60%) */}
+      <div className="w-3/5 p-8 overflow-y-auto">
+        <div className="max-w-2xl mx-auto">
+          {/* Header */}
+          <div className="mb-8 flex justify-between items-start">
+            <div>
+              <h1 className="text-4xl font-bold text-white mb-2">
+                Panel de Seguridad
+              </h1>
+              <p className="text-slate-400 text-lg">
+                Reporte de correos y archivos sospechosos
+              </p>
+            </div>
+            <button onClick={handleLogout} className="text-slate-400 hover:text-white transition-colors flex items-center gap-2">
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+              Salir
+            </button>
+          </div>
 
-      {/* --- COLUMN 1: SIDEBAR --- */}
-      <aside className={`
-          fixed inset-y-0 left-0 z-50 w-[300px] bg-slate-900 flex flex-col border-r border-slate-800 transition-transform duration-300 ease-in-out lg:static lg:translate-x-0
-          ${showMobileSidebar ? 'translate-x-0 shadow-2xl' : '-translate-x-full'}
-      `}>
-        {/* Header */}
-        <div className="p-6 border-b border-slate-800">
-          <BusinessBrand lightMode={true} textSize="text-xl" iconSize="h-8 w-8" />
-        </div>
+          {/* Tabs */}
+          <div className="flex gap-4 mb-6">
+            <button
+              onClick={() => { setAnalysisType('url'); setAnalysisResult(null); }}
+              className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${analysisType === 'url'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
+                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                }`}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+              </svg>
+              Enlace Sospechoso
+            </button>
+            <button
+              onClick={() => { setAnalysisType('file'); setAnalysisResult(null); }}
+              className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${analysisType === 'file'
+                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
+                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+                }`}
+            >
+              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+              </svg>
+              Archivo Adjunto
+            </button>
+          </div>
 
-        {/* New Report Action */}
-        <div className="p-4 pb-2">
-          <button
-            onClick={handleNewReportClick}
-            disabled={isSubmitting} // Disable if submitting
-            className={`w-full py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-bold text-sm shadow-lg transition-all active:scale-95
-              ${isSubmitting ? 'bg-slate-700 text-slate-400 cursor-not-allowed' : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-900/20'}`}
-          >
-            <Icons.Plus className="w-5 h-5" /> GENERAR INCIDENTE
-          </button>
-        </div>
-
-        {/* History List */}
-        <div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
-          <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-4 px-2">Historial Reciente</h3>
-          {incidents.length === 0 ? (
-            <div className="text-center py-10 flex flex-col items-center opacity-50">
-              <Icons.File className="h-8 w-8 text-slate-500 mb-2" />
-              <p className="text-sm text-slate-500">Sin reportes aún.</p>
+          {/* Formulario dinámico */}
+          {analysisType === 'url' ? (
+            <div className="mb-6">
+              <label className="block text-white font-semibold mb-3 text-lg">
+                Pegue el enlace sospechoso:
+              </label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-slate-500">https://</span>
+                </div>
+                <input
+                  type="text"
+                  value={url}
+                  onChange={handleUrlChange}
+                  placeholder="ejemplo-sospechoso.com"
+                  className="w-full pl-20 px-4 py-4 rounded-lg text-lg bg-slate-800 text-white border-2 border-slate-700 focus:border-blue-500 focus:outline-none transition-colors"
+                />
+              </div>
+              <button
+                onClick={handleAnalyze}
+                disabled={!url || analyzing}
+                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500 text-white font-bold py-4 rounded-lg text-lg transition-all flex items-center justify-center gap-2"
+              >
+                {analyzing ? (
+                  <>
+                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    </svg>
+                    Analizando...
+                  </>
+                ) : 'Analizar Riesgo Ahora'}
+              </button>
             </div>
           ) : (
-            incidents.map(inc => (
-              <HistoryItem
-                key={inc.id}
-                incident={inc}
-                isSelected={selectedIncident?.id === inc.id}
-                onClick={() => {
-                  if (!isSubmitting) {
-                    setSelectedIncident(inc);
-                    setShowMobileSidebar(false);
-                  }
-                }}
-              />
-            ))
+            <div className="mb-6">
+              <label className="block text-white font-semibold mb-3 text-lg">
+                Suba el archivo sospechoso:
+              </label>
+              {!attachedFile ? (
+                <label className="flex flex-col items-center justify-center w-full h-48 border-3 border-dashed border-slate-600 rounded-xl cursor-pointer bg-slate-800 hover:bg-slate-750 hover:border-blue-500 transition-all group">
+                  <svg className="w-16 h-16 text-slate-500 group-hover:text-blue-500 transition-colors mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                  </svg>
+                  <p className="text-slate-400 font-medium text-lg group-hover:text-white transition-colors">Click para seleccionar archivo</p>
+                  <p className="text-slate-500 text-sm mt-2">PDF, EXE, ZIP, DOC, etc.</p>
+                  <input type="file" className="hidden" onChange={handleFileChange} />
+                </label>
+              ) : (
+                <div className="bg-slate-800 border-2 border-slate-700 p-6 rounded-xl animate-fade-in">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-4">
+                      <div className="w-14 h-14 bg-blue-600 rounded-lg flex items-center justify-center">
+                        <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                        </svg>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white text-lg">{attachedFile.name}</p>
+                        <p className="text-slate-400">{(attachedFile.size / 1024).toFixed(2)} KB</p>
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleAnalyze}
+                        disabled={analyzing}
+                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                      >
+                        {analyzing ? '...' : 'Analizar'}
+                      </button>
+                      <button
+                        onClick={() => {
+                          setAttachedFile(null);
+                          setAnalysisResult(null);
+                        }}
+                        className="px-4 py-2 bg-slate-700 hover:bg-red-600 text-white font-semibold rounded-lg transition-colors"
+                      >
+                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Descripción */}
+          <div className="mb-6">
+            <label className="block text-white font-semibold mb-3 text-lg">
+              Descripción (Opcional):
+            </label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Cuéntanos qué pasó o por qué sospechas..."
+              rows={4}
+              className="w-full px-4 py-3 rounded-lg bg-slate-800 text-white border-2 border-slate-700 focus:border-blue-500 focus:outline-none resize-none transition-colors"
+            />
+          </div>
+
+          {/* Botón enviar */}
+          {analysisResult && (
+            <button
+              onClick={handleSubmitIncident}
+              disabled={submitting}
+              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-lg text-lg transition-colors shadow-lg shadow-green-900/30 flex items-center justify-center gap-2"
+            >
+              {submitting ? 'Enviando...' : (
+                <>
+                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Crear Reporte de Seguridad
+                </>
+              )}
+            </button>
           )}
         </div>
+      </div>
 
-        {/* Footer */}
-        <div className="p-4 border-t border-slate-800 bg-slate-900/50">
-          {/* ... User Info ... */}
-          <div className="flex items-center gap-3 rounded-md bg-slate-800 p-3 mb-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-indigo-600 text-white text-sm font-bold shadow-md">
-              {user?.username?.charAt(0).toUpperCase()}
+      {/* PANEL ANÁLISIS - DERECHA (40%) */}
+      <div className="w-2/5 bg-slate-950 border-l border-slate-800 p-8 flex flex-col h-screen sticky top-0">
+        <div className="mb-6">
+          <div className="flex items-center gap-3 mb-2">
+            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/50">
+              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+              </svg>
             </div>
-            <div className="overflow-hidden">
-              <p className="truncate text-sm font-bold text-white">{user?.username || 'Usuario'}</p>
-              <p className="truncate text-[10px] text-indigo-400 capitalize">{user?.role || 'Empleado'}</p>
+            <div>
+              <h2 className="text-2xl font-bold text-white">
+                Resultado del Análisis
+              </h2>
+              <p className="text-slate-400 text-sm">
+                Motor de Inteligencia Artificial
+              </p>
             </div>
           </div>
-          <button onClick={() => { logout(); navigate('/'); }} className="flex w-full items-center justify-center gap-2 rounded-md bg-transparent px-4 py-2 text-xs font-bold text-slate-400 hover:text-red-400 transition-colors">
-            <Icons.Logout className="h-4 w-4" /> CERRAR SESIÓN
-          </button>
-        </div>
-      </aside>
-
-      {/* --- COLUMN 2: MAIN CONTENT --- */}
-      <div className="flex-1 flex flex-col h-full overflow-hidden bg-white relative rounded-l-[30px] shadow-2xl border-l border-slate-200">
-
-        {/* Mobile Toggle */}
-        <div className="lg:hidden p-4 border-b flex justify-between items-center bg-white">
-          <button onClick={() => setShowMobileSidebar(true)} className="text-slate-800">
-            <Icons.Menu className="h-6 w-6" />
-          </button>
-          <span className="font-bold text-slate-900">Portal de Seguridad</span>
         </div>
 
-        <main className="flex-1 overflow-y-auto">
-          <div className="max-w-4xl mx-auto p-6 lg:p-12 min-h-full">
-            {selectedIncident ? (
-              // ... (Existing Incident Detail View - No significant logic change needed, just relying on updated data passed to panel)
-              <div className="animate-fade-in space-y-8">
-                <div className="border-b border-slate-100 pb-6">
-                  {/* ... Header ... */}
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wide border 
-                                            ${selectedIncident.status === 'Resolved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-blue-50 text-blue-700 border-blue-200'}`}>
-                      {selectedIncident.status}
-                    </span>
-                    <span className="text-xs text-slate-400 font-mono">ID: #{selectedIncident.id}</span>
-                  </div>
-                  <h2 className="text-2xl font-bold text-slate-900 leading-tight">{selectedIncident.title}</h2>
-                  <p className="text-sm text-slate-500 mt-2">
-                    Reportado el {new Date(selectedIncident.created_at).toLocaleString()}
+        <div className="flex-1 flex items-center justify-center">
+          {/* Loading */}
+          {analyzing && (
+            <div className="text-center">
+              <div className="animate-spin w-20 h-20 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-6"></div>
+              <p className="text-xl font-semibold text-white mb-2">
+                Analizando Amenazas...
+              </p>
+              <p className="text-slate-400">
+                Consultando VirusTotal y bases de datos <br /> de seguridad global...
+              </p>
+            </div>
+          )}
+
+          {/* Resultado CRÍTICO */}
+          {analysisResult && (analysisResult.risk_level === 'CRITICAL' || analysisResult.risk_level === 'HIGH' || analysisResult.risk_level === 'MEDIUM') && !analyzing && (
+            <div className="w-full">
+              <div className="bg-gradient-to-br from-red-900 to-red-950 p-8 rounded-2xl border-4 border-red-500 shadow-2xl shadow-red-900/50">
+                <div className="text-center mb-6">
+                  {/* Icono de alerta */}
+                  <svg className="w-24 h-24 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                  </svg>
+
+                  <h3 className="text-4xl font-black text-white mb-3 tracking-wide">
+                    {analysisResult.risk_level === 'CRITICAL' ? 'PELIGRO' : 'ADVERTENCIA'}
+                  </h3>
+                  <p className="text-2xl text-red-200 mb-6 font-medium">
+                    {analysisResult.message}
                   </p>
                 </div>
 
-                <div className="prose prose-sm max-w-none text-slate-600">
-                  <h3 className="text-slate-900 font-bold mb-2">Descripción del Incidente</h3>
-                  <p className="whitespace-pre-wrap leading-relaxed">{selectedIncident.description}</p>
-                  {/* ... URL Display ... */}
-                  {selectedIncident.url && (
-                    <div className="mt-4 not-prose">
-                      <div className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
-                        <Icons.Link className="h-5 w-5 text-slate-400" />
-                        <div className="flex-1 overflow-hidden">
-                          <p className="text-xs font-bold text-slate-500 uppercase">URL Reportada</p>
-                          <a href={selectedIncident.url} target="_blank" rel="noreferrer" className="text-indigo-600 hover:text-indigo-800 font-mono text-sm truncate block">
-                            {selectedIncident.url}
-                          </a>
+                <div className="bg-red-950 bg-opacity-80 p-6 rounded-xl mb-6 border border-red-800">
+                  <p className="text-xl font-bold text-white mb-3 text-center flex items-center justify-center gap-2">
+                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
+                    </svg>
+                    NO ABRIR ESTE ARCHIVO
+                  </p>
+                  <p className="text-lg text-red-200 text-center">
+                    {analysisResult.detail}
+                  </p>
+                  {analysisResult.source && (
+                    <div className="mt-2 text-sm text-red-300 text-center">
+                      Detectado por: {analysisResult.source}
+                    </div>
+                  )}
+
+                  {/* NUEVO: Explicación Gemini */}
+                  {analysisResult.gemini_explicacion && (
+                    <div className="mt-6 bg-red-800 bg-opacity-40 p-6 rounded-xl border-2 border-red-600">
+                      <div className="flex items-start gap-3 mb-3">
+                        <svg className="w-6 h-6 text-red-300 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="text-white font-semibold mb-2">
+                            ¿Qué significa esto?
+                          </p>
+                          <p className="text-red-100 text-lg leading-relaxed">
+                            {analysisResult.gemini_explicacion}
+                          </p>
+                        </div>
+                      </div>
+
+                      {analysisResult.gemini_recomendacion && (
+                        <div className="mt-4 pt-4 border-t border-red-700">
+                          <p className="text-red-200 font-semibold mb-2">
+                            Recomendación:
+                          </p>
+                          <p className="text-red-100 text-lg">
+                            {analysisResult.gemini_recomendacion}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-red-900 bg-opacity-40 p-6 rounded-xl border border-red-800/50">
+                  <p className="font-bold text-white mb-3 text-lg border-b border-red-700 pb-2">
+                    Acciones Recomendadas:
+                  </p>
+                  <div className="space-y-3 text-red-100">
+                    <div className="flex items-start gap-3">
+                      <div className="bg-red-500 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
+                      <p>Crear reporte inmediatamente (Botón verde)</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="bg-red-500 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
+                      <p>No ejecutar ni descargar el contenido.</p>
+                    </div>
+                    <div className="flex items-start gap-3">
+                      <div className="bg-red-500 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
+                      <p>Esperar contacto del equipo de seguridad.</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Resultado SEGURO */}
+          {analysisResult && analysisResult.risk_level === 'LOW' && !analyzing && (
+            <div className="w-full">
+              <div className="bg-gradient-to-br from-green-900 to-green-950 p-8 rounded-2xl border-4 border-green-500 shadow-2xl shadow-green-900/50">
+                <div className="text-center">
+                  {/* Icono check */}
+                  <svg className="w-24 h-24 text-green-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+
+                  <h3 className="text-4xl font-black text-white mb-3">
+                    SEGURO
+                  </h3>
+                  <p className="text-xl text-green-200 mb-6 font-medium">
+                    {analysisResult.message}
+                  </p>
+
+                  <div className="bg-green-950 bg-opacity-80 p-6 rounded-xl border border-green-800">
+                    <p className="text-lg text-green-100 flex items-center justify-center gap-2">
+                      <svg className="w-6 h-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      {analysisResult.detail}
+                    </p>
+                    {analysisResult.source && (
+                      <div className="mt-2 text-sm text-gray-400">
+                        Analizado con: {analysisResult.source}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* NUEVO: Explicación Gemini */}
+                  {analysisResult.gemini_explicacion && (
+                    <div className="mt-6 bg-green-800 bg-opacity-40 p-6 rounded-xl border-2 border-green-600">
+                      <div className="flex items-start gap-3">
+                        <svg className="w-6 h-6 text-green-300 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <div>
+                          <p className="text-green-100 text-lg leading-relaxed">
+                            {analysisResult.gemini_explicacion}
+                          </p>
                         </div>
                       </div>
                     </div>
                   )}
                 </div>
-
-                {/* Mobile Analysis Panel */}
-                {selectedIncident.gemini_analysis && (
-                  <div className="mt-8 pt-8 border-t border-slate-100 lg:hidden">
-                    <AIAnalysisPanel
-                      isAnalyzing={false}
-                      analysisData={selectedIncident.gemini_analysis}
-                      virustotalData={selectedIncident.virustotal_result}
-                      incidentCount={0}
-                    />
-                  </div>
-                )}
               </div>
-            ) : (
-              // --- VIEW: NEW REPORT FORM (Keep existing, update Button) ---
-              <div className="animate-fade-in h-full flex flex-col justify-center max-w-2xl mx-auto">
-                <div className="mb-10 text-center">
-                  <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight mb-3">
-                    Nuevo Reporte
-                  </h1>
-                  <p className="text-slate-500 text-lg leading-relaxed">
-                    Describa el incidente de seguridad. Nuestra IA lo analizará en tiempo real.
-                  </p>
-                </div>
+            </div>
+          )}
 
-                {/* Success/Error Banners (Keep existing) */}
-                {submitSuccess && (
-                  <div className="bg-green-50 border border-green-200 p-4 rounded-xl mb-6 flex items-start gap-4 animate-fade-in-up shadow-sm">
-                    <div className="bg-green-100 p-2 rounded-full mt-0.5"><Icons.Check className="h-5 w-5 text-green-700" /></div>
-                    <div>
-                      <p className="font-bold text-green-900">Reporte Enviado</p>
-                      <p className="text-sm text-green-800 mt-1">El equipo de seguridad ha recibido su reporte.</p>
-                    </div>
-                  </div>
-                )}
-                {submitError && (
-                  <div className="bg-red-50 border border-red-200 p-4 rounded-xl mb-6 flex items-center gap-3 animate-fade-in">
-                    <Icons.Alert className="h-5 w-5 text-red-600" />
-                    <span className="text-sm font-medium text-red-800">{submitError}</span>
-                  </div>
-                )}
-
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  {/* Inputs (URL, Desc, File) - Keep same structure */}
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">URL</label>
-                    <div className="relative group">
-                      <div className="absolute left-4 top-3.5 text-slate-400 group-focus-within:text-indigo-600 transition-colors"><Icons.Link className="h-5 w-5" /></div>
-                      <input type="url" name="url" value={form.url} onChange={handleInputChange} placeholder="https://malicioso.com" className="w-full pl-11 pr-4 py-3.5 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 font-mono text-sm text-slate-900" />
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="text-xs font-bold text-slate-500 uppercase tracking-widest ml-1">Detalles (Opcional)</label>
-                    <div className="relative">
-                      <textarea name="description" value={form.description} onChange={handleInputChange} rows="6" placeholder="Describa qué sucedió..." className="w-full p-4 bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:border-indigo-500 outline-none transition-all placeholder:text-slate-400 resize-none text-base leading-relaxed text-slate-900" />
-                      <div className="absolute right-3 bottom-3 bg-white/80 backdrop-blur px-2 py-1 rounded text-[10px] items-center gap-2 flex">
-                        {isAnalyzing ? (
-                          <span className="text-indigo-600 font-bold flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-indigo-600 animate-ping"></span>ANALIZANDO</span>
-                        ) : (<span className="text-slate-400 font-medium">IA EN ESPERA</span>)}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="border border-slate-200 rounded-xl p-1 bg-slate-50">
-                    <label className="flex items-center justify-center w-full py-6 border-2 border-dashed border-slate-200 rounded-lg cursor-pointer hover:bg-white hover:border-indigo-300 transition-all group">
-                      <input type="file" onChange={handleFileChange} className="hidden" />
-                      <div className="text-center">
-                        {attachedFile ? (
-                          <div className="flex flex-col items-center">
-                            <Icons.File className="h-8 w-8 text-indigo-500 mb-2" />
-                            <span className="text-sm font-bold text-indigo-900">{attachedFile.name}</span>
-                            <span className="text-xs text-slate-500">{(attachedFile.size / 1024).toFixed(1)} KB</span>
-                          </div>
-                        ) : (
-                          <div className="flex flex-col items-center gap-1">
-                            <Icons.Paperclip className="h-6 w-6 text-slate-400 group-hover:text-indigo-500 transition-colors" />
-                            <span className="text-sm font-medium text-slate-600">Adjuntar Archivo</span>
-                          </div>
-                        )}
-                      </div>
-                    </label>
-                  </div>
-
-                  {/* UPDATED: Dynamic Button */}
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className={`w-full py-4 text-white font-bold rounded-xl shadow-lg shadow-indigo-500/30 transform transition-all flex items-center justify-center gap-2
-                                        ${isSubmitting ? 'bg-indigo-400 cursor-not-allowed translate-y-0 shadow-none' : 'bg-slate-900 hover:bg-indigo-700 hover:-translate-y-0.5'}`}
-                  >
-                    {isSubmitting ? (
-                      <>
-                        <Icons.Refresh className="h-5 w-5 animate-spin" /> {loadingText || 'Procesando...'}
-                      </>
-                    ) : (
-                      <>
-                        <Icons.Shield className="h-5 w-5" /> GENERAR INCIDENTE
-                      </>
-                    )}
-                  </button>
-                </form>
-              </div>
-            )}
-          </div>
-        </main>
-      </div>
-
-      {/* --- COLUMN 3: AI PANEL (Right) --- */}
-      <div className={`hidden lg:block w-[350px] bg-slate-50 border-l border-slate-200 flex-shrink-0`}>
-        <div className="h-full overflow-y-auto custom-scrollbar">
-          <AIAnalysisPanel
-            isAnalyzing={isAnalyzing}
-            analysisData={selectedIncident ? selectedIncident.gemini_analysis : realTimeAnalysis}
-            virustotalData={selectedIncident ? selectedIncident.virustotal_result : realTimeVT}
-            incidentCount={incidents.length}
-          />
+          {/* Estado inicial */}
+          {!analyzing && !analysisResult && (
+            <div className="text-center py-16 opacity-50">
+              <svg className="w-32 h-32 text-slate-600 mx-auto mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+              </svg>
+              <p className="text-slate-400 text-xl font-light">
+                Pegue un enlace o suba un archivo<br />para iniciar el análisis de seguridad.
+              </p>
+            </div>
+          )}
         </div>
       </div>
     </div>
