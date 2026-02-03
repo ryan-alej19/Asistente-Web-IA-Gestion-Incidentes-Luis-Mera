@@ -1,31 +1,29 @@
-# Dockerfile Backend - Tesis Ciberseguridad
-# Finalidad: Demostración Académica y Reproducibilidad
+# Dockerfile de Producción para Render
 
-# 1. Imagen base oficial de Python (ligera)
 FROM python:3.11-slim
 
-# 2. Variables de entorno para optimizar Python en Docker
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-
-# 3. Directorio de trabajo
+# 2. Directorio de trabajo
 WORKDIR /app
 
-# 4. Instalar dependencias del sistema (si se requieren para compilar)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+# Variables de entorno para optimizar Python
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
 
-# 5. Instalar dependencias de Python
+# 3. Copiar requirements e instalar dependencias
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 6. Copiar el código fuente
+# 4. Copiar código fuente
 COPY . .
 
-# 7. Exponer puerto (Documentación: puerto 8000)
-EXPOSE 8000
+# 5. Recopilar archivos estáticos (Build time)
+# Nota: La base de datos no está disponible aquí, asi que asegura que collectstatic no la necesite
+RUN python manage.py collectstatic --no-input
 
-# 8. Comando de inicio (Migrar y Correr)
-# Nota: En producción real se usaría gunicorn, para demo académica runserver es aceptado
-CMD ["sh", "-c", "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"]
+# 7. Exponer puerto (Documentación)
+# Render inyecta la variable PORT en tiempo de ejecución
+EXPOSE 10000
+
+# 6 y 8. Ejecutar migraciones e iniciar Gunicorn
+# Usamos sh -c para encadenar los comandos correctamente y usar la variable de entorno $PORT
+CMD sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
