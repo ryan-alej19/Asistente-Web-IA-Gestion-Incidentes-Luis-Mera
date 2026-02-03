@@ -1,25 +1,87 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+} from 'chart.js';
+import { Bar, Pie } from 'react-chartjs-2';
+
+ChartJS.register(
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Title,
+  Tooltip,
+  Legend,
+  ArcElement
+);
 
 const AnalystDashboard = () => {
   const [incidents, setIncidents] = useState([]);
+  const [stats, setStats] = useState(null);
   const [selectedIncident, setSelectedIncident] = useState(null);
 
   useEffect(() => {
-    fetchIncidents();
+    fetchData();
   }, []);
 
-  const fetchIncidents = async () => {
+  const fetchData = async () => {
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.get('http://localhost:8000/api/incidents/list/', {
-        headers: { Authorization: `Token ${token}` }
-      });
-      setIncidents(res.data);
+      const config = { headers: { Authorization: `Token ${token}` } };
+
+      const [resIncidents, resStats] = await Promise.all([
+        axios.get('http://localhost:8000/api/incidents/list/', config),
+        axios.get('http://localhost:8000/api/incidents/stats/', config)
+      ]);
+
+      setIncidents(resIncidents.data);
+      setStats(resStats.data);
     } catch (err) {
-      console.error(err);
+      console.error("Error fetching data:", err);
     }
   };
+
+  const updateStatus = async (id, newStatus) => {
+    try {
+      const token = localStorage.getItem('token');
+      await axios.patch(`http://localhost:8000/api/incidents/${id}/update-status/`, { status: newStatus }, {
+        headers: { Authorization: `Token ${token}` }
+      });
+      fetchData(); // Recargar datos
+      setSelectedIncident(null); // Cerrar modal si está abierto
+    } catch (err) {
+      console.error(err);
+      alert('Error actualizando estado');
+    }
+  };
+
+  const downloadPDF = async (id) => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`http://localhost:8000/api/incidents/${id}/pdf/`, {
+        headers: { Authorization: `Token ${token}` },
+        responseType: 'blob',
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `reporte_incidente_${id}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+    } catch (err) {
+      console.error("Error downloading PDF", err);
+      alert('Error descargando PDF');
+    }
+  };
+
 
   const handleLogout = () => {
     localStorage.clear();
@@ -40,6 +102,41 @@ const AnalystDashboard = () => {
           <button onClick={handleLogout} className="logout-btn">Salir</button>
         </div>
       </header>
+
+      {stats && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 300px', gap: '2rem', marginBottom: '2rem' }}>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '1rem', height: 'fit-content' }}>
+            <div className="card" style={{ textAlign: 'center' }}>
+              <h4 style={{ color: 'var(--text-secondary)' }}>Total Incidentes</h4>
+              <p style={{ fontSize: '2.5rem', fontWeight: 'bold', color: 'white' }}>{stats.total}</p>
+            </div>
+            <div className="card" style={{ textAlign: 'center', borderColor: '#eab308' }}>
+              <h4 style={{ color: '#eab308' }}>Pendientes</h4>
+              <p style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#fef08a' }}>{stats.pending}</p>
+            </div>
+            <div className="card" style={{ textAlign: 'center', borderColor: '#ef4444' }}>
+              <h4 style={{ color: '#ef4444' }}>Críticos</h4>
+              <p style={{ fontSize: '2.5rem', fontWeight: 'bold', color: '#fecaca' }}>{stats.critical}</p>
+            </div>
+          </div>
+
+          <div className="card" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <h4>Tipos de Amenaza</h4>
+            <div style={{ width: '200px', height: '200px' }}>
+              <Pie data={{
+                labels: ['Archivos', 'URLs'],
+                datasets: [{
+                  data: [stats.by_type.files, stats.by_type.urls],
+                  backgroundColor: ['#3b82f6', '#8b5cf6'],
+                  borderColor: '#1e293b',
+                  borderWidth: 2
+                }]
+              }} options={{ plugins: { legend: { position: 'bottom', labels: { color: 'white' } } } }} />
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="card">
         <h3>Incidentes Recientes</h3>
@@ -137,10 +234,27 @@ const AnalystDashboard = () => {
                     </pre>
                   </div>
                 )}
+
+                <div style={{ marginTop: '1.5rem', borderTop: '1px solid #334155', paddingTop: '1rem' }}>
+                  <h4>Gestionar Estado:</h4>
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap' }}>
+                    <button onClick={() => updateStatus(selectedIncident.id, 'pending')} className="btn" style={{ background: '#334155' }}>Pendiente</button>
+                    <button onClick={() => updateStatus(selectedIncident.id, 'in_progress')} className="btn" style={{ background: '#0284c7' }}>En Progreso</button>
+                    <button onClick={() => updateStatus(selectedIncident.id, 'resolved')} className="btn" style={{ background: '#16a34a' }}>Resolver</button>
+                    <button onClick={() => updateStatus(selectedIncident.id, 'closed')} className="btn" style={{ background: '#475569' }}>Cerrar</button>
+                  </div>
+                </div>
               </div>
             </div>
 
-            <div style={{ marginTop: '2rem', textAlign: 'right' }}>
+            <div style={{ marginTop: '2rem', textAlign: 'right', display: 'flex', justifyContent: 'flex-end', gap: '1rem' }}>
+              <button
+                className="btn"
+                style={{ background: '#ef4444', color: 'white' }}
+                onClick={() => downloadPDF(selectedIncident.id)}
+              >
+                📄 Descargar Reporte PDF
+              </button>
               <button className="btn btn-primary" onClick={() => setSelectedIncident(null)}>Cerrar</button>
             </div>
           </div>

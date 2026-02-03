@@ -1,29 +1,26 @@
-# Dockerfile de Producción para Render
+# Backend Dockerfile
+FROM python:3.12-slim
 
-FROM python:3.11-slim
+# Evitar archivos .pyc y buffers
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
 
-# 2. Directorio de trabajo
 WORKDIR /app
 
-# Variables de entorno para optimizar Python
-ENV PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONUNBUFFERED=1
+# Instalar dependencias del sistema (útil para compilación si es necesario, y netcat para scripts de espera)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-# 3. Copiar requirements e instalar dependencias
+# Instalar requisitos
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# 4. Copiar código fuente
+# Copiar el proyecto (aunque usaremos volúmenes en dev, esto es buena práctica)
 COPY . .
 
-# 5. Recopilar archivos estáticos (Build time)
-# Nota: La base de datos no está disponible aquí, asi que asegura que collectstatic no la necesite
-RUN python manage.py collectstatic --no-input
+# Exponer puerto
+EXPOSE 8000
 
-# 7. Exponer puerto (Documentación)
-# Render inyecta la variable PORT en tiempo de ejecución
-EXPOSE 10000
-
-# 6 y 8. Ejecutar migraciones e iniciar Gunicorn
-# Usamos sh -c para encadenar los comandos correctamente y usar la variable de entorno $PORT
-CMD sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT"
+# Comando por defecto
+CMD ["python", "manage.py", "runserver", "0.0.0.0:8000"]

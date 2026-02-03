@@ -36,12 +36,19 @@ class VirusTotalService:
             report_url = f"{self.base_url}/url/report"
             params = {'apikey': self.api_key, 'resource': url}
             
-            # Esperar resultado (max 30 seg)
-            for attempt in range(6):
+            # Esperar resultado (max 60 seg, 12 intentos)
+            for attempt in range(12):
                 time.sleep(5)
                 report_response = requests.get(report_url, params=params)
+                
+                # Manejo explícito de Cuota Excedida (204 No Content o 429 Too Many Requests)
+                if report_response.status_code in [204, 429]:
+                    logger.warning(f"VirusTotal Cuota Excedida (Status {report_response.status_code}).")
+                    return {'error': 'Quota Exceeded'}
+                
                 report_data = report_response.json()
                 
+                # response_code 1: Analizado. -2: En cola/analizando.
                 if report_data.get('response_code') == 1:
                     return {
                         'positives': report_data.get('positives', 0),
@@ -49,8 +56,11 @@ class VirusTotalService:
                         'permalink': report_data.get('permalink', ''),
                         'scan_date': report_data.get('scan_date', ''),
                     }
+                elif report_data.get('response_code') == -2:
+                    logger.info(f"VirusTotal analizando... Intento {attempt+1}/12")
+                    continue
             
-            return {'error': 'Timeout esperando resultado'}
+            return {'error': 'Timeout esperando resultado (Scanning loop)'}
             
         except Exception as e:
             logger.error(f"Error en VirusTotal: {e}")
@@ -101,22 +111,38 @@ class VirusTotalService:
             
             scan_response = requests.post(scan_url, files=files, params=params)
             
-            # Esperar analisis (max 60 seg)
-            for attempt in range(12):
+            # Esperar analisis (max 90 seg, 18 intentos)
+            for attempt in range(18):
                 time.sleep(5)
                 report_response = requests.get(report_url, params={'apikey': self.api_key, 'resource': file_hash})
-                report_data = report_response.json()
                 
-                if report_data.get('response_code') == 1:
-                    logger.info(f"Analisis completo: {report_data.get('positives')}/{report_data.get('total')}")
-                    return {
-                        'positives': report_data.get('positives', 0),
-                        'total': report_data.get('total', 0),
-                        'permalink': report_data.get('permalink', ''),
-                        'scan_date': report_data.get('scan_date', ''),
-                    }
+                # Manejo explícito de Cuota Excedida
+                if report_response.status_code in [204, 429]:
+                    logger.warning(f"VirusTotal Cuota Excedida (Status {report_response.status_code}).")
+                    return {'error': 'Quota Exceeded'}
+                
+                if report_response.status_code == 200:
+                    try:
+                        report_data = report_response.json()
+                        
+                        # Check response_code. -2 is Queued/Scanning in V2 API
+                        code = report_data.get('response_code')
+                        
+                        if code == 1:
+                            logger.info(f"Analisis completo: {report_data.get('positives')}/{report_data.get('total')}")
+                            return {
+                                'positives': report_data.get('positives', 0),
+                                'total': report_data.get('total', 0),
+                                'permalink': report_data.get('permalink', ''),
+                                'scan_date': report_data.get('scan_date', ''),
+                            }
+                        elif code == -2:
+                             logger.info(f"VirusTotal analizando archivo... Intento {attempt+1}")
+                             continue
+                    except ValueError:
+                         continue # Json error, retry
             
-            return {'error': 'Timeout esperando analisis'}
+            return {'error': 'Timeout esperando analisis (Scanning loop)'}
             
         except Exception as e:
             logger.error(f"Error analizando archivo: {e}")

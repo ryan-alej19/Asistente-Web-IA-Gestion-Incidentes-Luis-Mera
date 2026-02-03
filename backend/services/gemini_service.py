@@ -15,7 +15,8 @@ class GeminiService:
         api_key = config('GEMINI_API_KEY', default='')
         if api_key:
             genai.configure(api_key=api_key)
-            self.model = genai.GenerativeModel('gemini-1.5-flash')
+            # Cambiado de 'gemini-1.5-flash' a 'gemini-1.5-pro' por error 404
+            self.model = genai.GenerativeModel('gemini-1.5-pro')
         else:
             self.model = None
             logger.warning("Gemini API key no configurada")
@@ -39,23 +40,24 @@ class GeminiService:
             tipo = "archivo" if incident_type == "file" else "enlace"
             
             prompt = f"""
-Eres un asistente de seguridad que explica a empleados de oficina.
+Eres un experto en ciberseguridad explicando a un empleado sin conocimientos técnicos.
 
 Contexto:
 - Se analizó un {tipo}
-- {positives} de {total} antivirus detectaron que es peligroso
+- {positives} de {total} motores antivirus detectaron amenazas.
 
-Genera una respuesta en JSON con este formato:
+Tu tarea: Generar una respuesta JSON estricta con dos campos:
+1. "explicacion": Una frase ÚNICA y MEMORABLE de máximo 20 palabras. Debe sonar humana, como una advertencia de una secretaria o amigo.
+   - Si es MALWARE (>0 positivos): Usa tono de advertencia claro. Ej: "Secretaria: ¡Cuidado! No abras esto, es un virus peligroso."
+   - Si es SEGURO (0 positivos): Usa tono tranquilo. Ej: "Todo parece estar limpio y seguro."
+   
+2. "recomendacion": Una acción concreta (ej: "Eliminar archivo", "Abrir con confianza").
+
+Formato JSON esperado:
 {{
-  "explicacion": "Explicación simple de 15-20 palabras sobre qué significa esto",
-  "recomendacion": "Una acción clara que el empleado debe hacer"
+  "explicacion": "...",
+  "recomendacion": "..."
 }}
-
-Reglas:
-- Sin términos técnicos (malware, exploit, payload)
-- Como si explicaras a tu abuela
-- Directo y claro
-- En español
 """
             
             response = self.model.generate_content(prompt)

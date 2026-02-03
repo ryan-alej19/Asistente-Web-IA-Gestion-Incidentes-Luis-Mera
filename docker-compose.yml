@@ -1,39 +1,34 @@
-version: '3.8'
-
 services:
-  # Servicio Backend (Django)
   backend:
-    build: ./backend
-    container_name: tesis_backend
-    ports:
-      - "8000:8000"
+    build:
+      context: ./backend
+    container_name: tesis-backend
     volumes:
       - ./backend:/app
-      - sqlite_data:/app/db_data
-    environment:
-      - DEBUG=True
-      - SECRET_KEY=django-insecure-tesis-academic-key
-      # Las API KEYS deben estar en un archivo .env local
+    ports:
+      - "8000:8000"
     env_file:
       - ./backend/.env
-    networks:
-      - app-network
+    # Comando opcional para asegurar migraciones al iniciar (descomentar si se desea)
+    # command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
 
-  # Servicio Frontend (React + Nginx)
   frontend:
-    build: ./frontend
-    container_name: tesis_frontend
+    build:
+      context: ./frontend
+    container_name: tesis-frontend
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     ports:
-      - "3000:80"
+      - "3001:3001"
+    env_file:
+      - ./frontend/.env
+    environment:
+      - CHOKIDAR_USEPOLLING=true # Necesario para hot-reload en Windows/algunos sistemas
+      - WDS_SOCKET_PORT=0
+    stdin_open: true # Necesario para react-scripts en docker
+    tty: true
     depends_on:
       - backend
-    networks:
-      - app-network
 
-volumes:
-  sqlite_data:
-
-
-networks:
-  app-network:
-    driver: bridge
+# Red por defecto creada automáticamente, no es necesaria config extra para este caso simple

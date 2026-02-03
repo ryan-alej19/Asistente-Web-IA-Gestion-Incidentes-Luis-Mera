@@ -287,3 +287,150 @@ def incident_detail(request, incident_id):
         
     except Incident.DoesNotExist:
         return Response({'error': 'Incidente no encontrado'}, status=404)
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def incident_stats(request):
+    """
+    Estadísticas para el Dashboard de Analista.
+    Solo para analistas y admins.
+    """
+    try:
+        user_role = getattr(request.user, 'profile', None) and request.user.profile.role or 'employee'
+        if user_role not in ['admin', 'analyst']:
+            return Response({'error': 'No autorizado'}, status=403)
+
+        total_incidents = Incident.objects.count()
+        pending_incidents = Incident.objects.filter(status='pending').count()
+        critical_incidents = Incident.objects.filter(risk_level='CRITICAL').count()
+        
+        # Estadísticas por tipo
+        files_count = Incident.objects.filter(incident_type='file').count()
+        urls_count = Incident.objects.filter(incident_type='url').count()
+        
+        return Response({
+            'total': total_incidents,
+            'pending': pending_incidents,
+            'critical': critical_incidents,
+            'by_type': {
+                'files': files_count,
+                'urls': urls_count
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error en estadísticas: {e}")
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_incident_status(request, incident_id):
+    """
+    Actualizar estado de incidente (Analistas).
+    """
+    try:
+        user_role = getattr(request.user, 'profile', None) and request.user.profile.role or 'employee'
+        if user_role not in ['admin', 'analyst']:
+            return Response({'error': 'No autorizado'}, status=403)
+            
+        incident = Incident.objects.get(id=incident_id)
+        new_status = request.data.get('status')
+        
+        if new_status in ['pending', 'in_progress', 'resolved', 'closed']:
+            incident.status = new_status
+            incident.save()
+            return Response({'message': 'Estado actualizado', 'status': new_status})
+        else:
+            return Response({'error': 'Estado inválido'}, status=400)
+            
+    except Incident.DoesNotExist:
+        return Response({'error': 'Incidente no encontrado'}, status=404)
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
+from django.http import HttpResponse
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def generate_pdf_report(request, incident_id):
+    """
+    Genera un reporte PDF del incidente.
+    """
+    try:
+        incident = Incident.objects.get(id=incident_id)
+        
+        # Validar permisos (Solo el creador o analistas/admin pueden ver)
+        user_role = getattr(request.user, 'profile', None) and request.user.profile.role or 'employee'
+        if user_role == 'employee' and incident.reported_by != request.user:
+            return Response({'error': 'No autorizado'}, status=403)
+
+        response = HttpResponse(content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="reporte_incidente_{incident.id}.pdf"'
+
+        p = canvas.Canvas(response, pagesize=letter)
+        w, h = letter
+
+        # Encabezado
+        p.setFont("Helvetica-Bold", 16)
+        p.drawString(50, h - 50, f"Reporte de Incidente de Seguridad #{incident.id}")
+        
+        p.setFont("Helvetica", 12)
+        p.drawString(50, h - 80, f"Fecha: {incident.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        p.drawString(50, h - 100, f"Reportado por: {incident.reported_by.username}")
+        p.drawString(50, h - 120, f"Estado Actual: {incident.status.upper()}")
+        
+        # Detalles
+        p.line(50, h - 140, 550, h - 140)
+        
+        y = h - 170
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(50, y, "Detalles del Análisis:")
+        y -= 20
+        
+        p.setFont("Helvetica", 10)
+        p.drawString(50, y, f"Tipo: {incident.incident_type}")
+        y -= 15
+        p.drawString(50, y, f"Objetivo: {incident.url or incident.attached_file.name}")
+        y -= 15
+        p.drawString(50, y, f"Nivel de Riesgo: {incident.risk_level}")
+        y -= 25
+        
+        # Resultados Técnicos
+        if incident.virustotal_result:
+            positives = incident.virustotal_result.get('positives', 0)
+            total = incident.virustotal_result.get('total', 0)
+            p.drawString(50, y, f"Motores Antivirus (VirusTotal/MetaDefender): {positives}/{total} detecciones")
+            y -= 25
+
+        # Análisis IA
+        if incident.gemini_analysis:
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(50, y, "Análisis de Asistente IA (Explicación):")
+            y -= 20
+            p.setFont("Helvetica-Oblique", 10)
+            
+            # Simple text wrap logic (very basic)
+            text = incident.gemini_analysis
+            lines = []
+            while len(text) > 90:
+                split_at = text[:90].rfind(' ')
+                if split_at == -1: split_at = 90
+                lines.append(text[:split_at])
+                text = text[split_at:].strip()
+            lines.append(text)
+            
+            for line in lines:
+                p.drawString(50, y, line)
+                y -= 15
+
+        # Footer
+        p.setFont("Helvetica", 8)
+        p.drawString(50, 30, "Reporte generado automáticamente por Sistema de Asistente de Ciberseguridad")
+        
+        p.showPage()
+        p.save()
+        return response
+        
+    except Incident.DoesNotExist:
+        return Response({'error': 'Incidente no encontrado'}, status=404)
+    except Exception as e:
+        logger.error(f"Error generando PDF: {e}")
+        return Response({'error': str(e)}, status=500)
