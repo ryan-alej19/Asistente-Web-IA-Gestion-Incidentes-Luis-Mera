@@ -43,7 +43,7 @@ class VirusTotalService:
                 
                 # Manejo explícito de Cuota Excedida (204 No Content o 429 Too Many Requests)
                 if report_response.status_code in [204, 429]:
-                    logger.warning(f"VirusTotal Cuota Excedida (Status {report_response.status_code}).")
+                    logger.info(f"Límite de cuota VirusTotal alcanzado ({report_response.status_code}).")
                     return {'error': 'Quota Exceeded'}
                 
                 report_data = report_response.json()
@@ -118,7 +118,7 @@ class VirusTotalService:
                 
                 # Manejo explícito de Cuota Excedida
                 if report_response.status_code in [204, 429]:
-                    logger.warning(f"VirusTotal Cuota Excedida (Status {report_response.status_code}).")
+                    logger.info(f"Límite de cuota VirusTotal alcanzado ({report_response.status_code}).")
                     return {'error': 'Quota Exceeded'}
                 
                 if report_response.status_code == 200:

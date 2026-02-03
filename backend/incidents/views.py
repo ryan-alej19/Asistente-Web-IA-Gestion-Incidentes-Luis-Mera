@@ -11,11 +11,11 @@ import logging
 
 logger = logging.getLogger(__name__)
 
-@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def analyze_file_preview(request):
     """
-    Análisis de archivo con rotación automática VirusTotal -> MetaDefender.
+    Funcion para analizar archivos.
+    Primero usa VirusTotal y si falla, usa MetaDefender.
     """
     try:
         file_obj = request.FILES.get('file')
@@ -25,36 +25,49 @@ def analyze_file_preview(request):
         
         logger.info(f"Analizando archivo: {file_obj.name}")
         
-        # Intentar con VirusTotal (Principal)
-        vt_service = VirusTotalService()
-        vt_result = vt_service.analyze_file(file_obj)
+        # Intentamos primero con VirusTotal con proteccion anti-crash
+        vt_result = {}
+        vt_success = False
         
-        source_used = 'VirusTotal'
-        vt_success = 'error' not in vt_result and vt_result.get('positives') is not None
-        
-        # Si VT falla, rotar a MetaDefender (Respaldo)
+        try:
+            vt_service = VirusTotalService()
+            vt_result = vt_service.analyze_file(file_obj)
+            
+            # Verificamos si hubo error o cuota excedida
+            if 'error' in vt_result:
+                raise Exception(vt_result['error'])
+                
+            vt_success = True
+            source_used = 'VirusTotal'
+            
+        except Exception as e:
+            logger.info(f"[INFO] Fallo VirusTotal ({e}). Cambiando a motor de respaldo (MetaDefender)...")
+            vt_success = False
+
+        # Si VirusTotal falla, probamos con MetaDefender (Fallback Automatico)
         if not vt_success:
-            logger.warning("VirusTotal no disponible o falló, rotando a MetaDefender...")
-            
-            md_service = MetaDefenderService()
-            md_result = md_service.analyze_file(file_obj)
-            
-            if 'error' not in md_result:
-                vt_result = md_result
-                source_used = 'MetaDefender'
-                logger.info("MetaDefender respondió exitosamente")
-            else:
-                # Ambos servicios fallaron
-                logger.error("Todos los servicios de análisis fallaron")
+            try:
+                md_service = MetaDefenderService()
+                md_result = md_service.analyze_file(file_obj)
+                
+                if 'error' not in md_result:
+                    vt_result = md_result
+                    source_used = 'MetaDefender'
+                    logger.info("MetaDefender funciono correctamente")
+                else:
+                    raise Exception(md_result['error'])
+            except Exception as e:
+                # Si ambos fallan
+                logger.error(f"Todos los servicios fallaron: {e}")
                 return Response({
                     'risk_level': 'UNKNOWN',
                     'message': 'Servicios no disponibles',
-                    'detail': 'No se pudo completar el análisis. Intente más tarde.',
+                    'detail': 'No se pudo completar el analisis. Protocolo de contingencia activado.',
                     'positives': 0,
                     'total': 0
                 }, status=503)
         
-        # Extraer resultados
+        # Obtenemos los resultados
         positives = vt_result.get('positives', 0)
         total = vt_result.get('total', 90)
         
@@ -117,36 +130,102 @@ def analyze_url_preview(request):
         
         logger.info(f"Analizando URL: {url}")
         
-        # VirusTotal
-        vt_service = VirusTotalService()
-        vt_result = vt_service.analyze_url(url)
+        # Variables para el resultado unificado
+        positives = 0
+        total = 0
+        risk = 'UNKNOWN'
+        message = ''
+        detail = ''
+        source_used = ''
+        vt_data = {} # Para guardar raw data si existe
         
-        source_used = 'VirusTotal'
+        # 1. Intentamos con VirusTotal
+        vt_result = {}
+        vt_success = False
         
-        # Calcular riesgo
-        positives = vt_result.get('positives', 0)
-        total = vt_result.get('total', 90)
-        
-        if positives > 5:
-            risk = 'CRITICAL'
-            message = 'URL peligrosa detectada'
-        elif positives > 0:
-            risk = 'MEDIUM'
-            message = 'URL sospechosa'
-        else:
-            risk = 'LOW'
-            message = 'URL segura'
+        try:
+            vt_service = VirusTotalService()
+            vt_result = vt_service.analyze_url(url)
             
-        detail = f'{positives} de {total} motores detectaron amenazas' if positives > 0 else f'Analizado por {total} motores - Sin amenazas'
+            if 'error' in vt_result:
+                 raise Exception(vt_result['error'])
+            
+            vt_success = True
+            source_used = 'VirusTotal'
+            vt_data = vt_result
+                 
+        except Exception as e:
+            logger.warning(f"VirusTotal fallo ({e}). Activando Google Safe Browsing (Fallback)...")
+            vt_success = False
 
-        # Gemini
+        # 2. Si falla VT, usamos Google Safe Browsing
+        gsb_success = False
+        if not vt_success:
+            from services.google_safe_browsing_service import GoogleSafeBrowsingService
+            
+            try:
+                gsb_service = GoogleSafeBrowsingService()
+                gsb_result = gsb_service.check_url(url)
+                
+                if 'error' not in gsb_result:
+                    gsb_success = True
+                    source_used = gsb_result['source']
+                    
+                    # Mapeamos resultado GSB a variables comunes
+                    # GSB no tiene "positives/total" numérico real, asi que simulamos
+                    if not gsb_result['safe']:
+                        positives = 1
+                        total = 1
+                        risk = gsb_result['risk_level'] # CRITICAL
+                        message = gsb_result['message']
+                        detail = gsb_result['detail']
+                    else:
+                        positives = 0
+                        total = 1
+                        risk = gsb_result['risk_level'] # LOW
+                        message = gsb_result['message']
+                        detail = gsb_result['detail']
+            except Exception as e:
+                logger.error(f"Fallo critico GSB: {e}")
+                gsb_success = False
+
+            if not gsb_success:
+                 # Si ambos fallan
+                 return Response({
+                     'risk_level': 'UNKNOWN',
+                     'message': 'Servicio no disponible',
+                     'detail': 'No se pudo verificar la URL con ninguno de los motores (VirusTotal/Google).',
+                     'positives': 0,
+                     'total': 0
+                 }, status=200)
+
+        # 3. Procesar resultado de VirusTotal (si tuvo exito)
+        if vt_success:
+            positives = vt_result.get('positives', 0)
+            total = vt_result.get('total', 90)
+            
+            if positives > 5:
+                risk = 'CRITICAL'
+                message = 'URL peligrosa detectada'
+            elif positives > 0:
+                risk = 'MEDIUM'
+                message = 'URL sospechosa'
+            else:
+                risk = 'LOW'
+                message = 'URL segura'
+                
+            detail = f'{positives} de {total} motores detectaron amenazas' if positives > 0 else f'Analizado por {total} motores - Sin amenazas'
+
+        # 4. Gemini (Explicacion Humana para CUALQUIER resultado)
         gemini_explicacion = ''
         gemini_recomendacion = ''
         try:
             gemini_service = GeminiService()
+            # Pasamos positives/total unificados
             gemini_result = gemini_service.explain_threat(positives, total, 'url')
-            gemini_explicacion = gemini_result.get('explicacion', '')
-            gemini_recomendacion = gemini_result.get('recomendacion', '')
+            if gemini_result:
+                gemini_explicacion = gemini_result.get('explicacion', '')
+                gemini_recomendacion = gemini_result.get('recomendacion', '')
         except Exception as e:
             logger.warning(f"Gemini no disponible: {e}")
         
@@ -154,10 +233,12 @@ def analyze_url_preview(request):
             'risk_level': risk,
             'message': message,
             'detail': detail,
-            'virustotal': vt_result,
+            'virustotal': vt_data,
             'source': source_used,
             'gemini_explicacion': gemini_explicacion,
-            'gemini_recomendacion': gemini_recomendacion
+            'gemini_recomendacion': gemini_recomendacion,
+            'positives': positives,
+            'total': total
         })
         
     except Exception as e:

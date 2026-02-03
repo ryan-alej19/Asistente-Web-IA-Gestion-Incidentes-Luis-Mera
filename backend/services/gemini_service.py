@@ -15,8 +15,15 @@ class GeminiService:
         api_key = config('GEMINI_API_KEY', default='')
         if api_key:
             genai.configure(api_key=api_key)
-            # Cambiado de 'gemini-1.5-flash' a 'gemini-1.5-pro' por error 404
-            self.model = genai.GenerativeModel('gemini-1.5-pro')
+            # Usamos 'gemini-1.5-pro' que es el modelo flagship actual estable
+            # Si la librería es muy vieja, el fallback será 'gemini-pro'
+            try:
+                self.model = genai.GenerativeModel('gemini-1.5-pro')
+                self.model_name = 'gemini-1.5-pro'
+            except:
+                logger.warning("Modelo 1.5 no encontrado, usando versión legacy estable")
+                self.model = genai.GenerativeModel('gemini-pro')
+                self.model_name = 'gemini-pro'
         else:
             self.model = None
             logger.warning("Gemini API key no configurada")
@@ -24,14 +31,6 @@ class GeminiService:
     def explain_threat(self, positives, total, incident_type):
         """
         Genera explicación simple del análisis.
-        
-        Args:
-            positives: Número de detectores que encontraron amenazas
-            total: Total de detectores
-            incident_type: 'file' o 'url'
-        
-        Returns:
-            dict con explicacion y recomendacion
         """
         if not self.model:
             return self._fallback_explanation(positives, total)
@@ -40,40 +39,49 @@ class GeminiService:
             tipo = "archivo" if incident_type == "file" else "enlace"
             
             prompt = f"""
-Eres un experto en ciberseguridad explicando a un empleado sin conocimientos técnicos.
+Actúa como un Analista Senior de Ciberseguridad del CSIRT (Equipo de Respuesta a Incidentes). 
+Tu audiencia es un empleado no técnico (secretaria/administrativo). 
 
-Contexto:
-- Se analizó un {tipo}
-- {positives} de {total} motores antivirus detectaron amenazas.
+Analiza los siguientes datos técnicos:
+- Tipo de incidencia: {tipo}
+- Motores de detección positivos: {positives} de {total}
 
-Tu tarea: Generar una respuesta JSON estricta con dos campos:
-1. "explicacion": Una frase ÚNICA y MEMORABLE de máximo 20 palabras. Debe sonar humana, como una advertencia de una secretaria o amigo.
-   - Si es MALWARE (>0 positivos): Usa tono de advertencia claro. Ej: "Secretaria: ¡Cuidado! No abras esto, es un virus peligroso."
-   - Si es SEGURO (0 positivos): Usa tono tranquilo. Ej: "Todo parece estar limpio y seguro."
-   
-2. "recomendacion": Una acción concreta (ej: "Eliminar archivo", "Abrir con confianza").
+Dame UN SOLO PÁRRAFO de advertencia clara, explicando el riesgo real (robo de datos, daño al PC, ransomware) y la acción inmediata a tomar (Borrar/No abrir). 
+
+Tono: Urgente pero profesional. No uses tecnicismos complejos innecesarios.
 
 Formato JSON esperado:
 {{
-  "explicacion": "...",
-  "recomendacion": "..."
+  "explicacion": "Texto de la advertencia (Max 30 palabras)",
+  "recomendacion": "Accion concreta (Ej: Borrar ahora)"
 }}
 """
             
-            response = self.model.generate_content(prompt)
-            text = response.text.strip()
-            
-            # Limpiar respuesta
-            text = text.replace('```json', '').replace('```', '').strip()
-            
-            result = json.loads(text)
-            
-            logger.info(f"Gemini: {result.get('explicacion')}")
-            
-            return result
+            try:
+                response = self.model.generate_content(prompt)
+                text = response.text.strip()
+                
+                # Limpiamos el texto
+                text = text.replace('```json', '').replace('```', '').strip()
+                result = json.loads(text)
+                
+                logger.info(f"Gemini ({self.model_name}) respondio: {result.get('explicacion')}")
+                return result
+
+            except Exception as e:
+                logger.warning(f"Fallo modelo {self.model_name}: {e}. Intentando fallback a gemini-pro...")
+                
+                # Fallback a modelo Legacy si falla el Pro
+                secondary_model = genai.GenerativeModel('gemini-pro')
+                response = secondary_model.generate_content(prompt)
+                text = response.text.strip().replace('```json', '').replace('```', '').strip()
+                result = json.loads(text)
+                
+                logger.info(f"Gemini (Legacy) respondio: {result.get('explicacion')}")
+                return result
             
         except Exception as e:
-            logger.error(f"Error con Gemini: {e}")
+            logger.error(f"Error critico Gemini (Todos los modelos): {e}")
             return self._fallback_explanation(positives, total)
     
     def _fallback_explanation(self, positives, total):
