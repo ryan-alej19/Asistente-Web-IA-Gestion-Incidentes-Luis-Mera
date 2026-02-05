@@ -1,110 +1,96 @@
-import google.generativeai as genai
+import requests
+import json
+import os
 import logging
 from decouple import config
-import json
 
 logger = logging.getLogger(__name__)
 
 class GeminiService:
     """
-    Servicio de análisis con Google Gemini.
-    Traduce resultados técnicos a lenguaje simple.
+    Servicio de análisis con Google Gemini (Estrategia 2026).
+    Usa API REST directa y modelos Serie 2.0 para evitar 404s.
     """
     
     def __init__(self):
-        api_key = config('GEMINI_API_KEY', default='')
-        if api_key:
-            genai.configure(api_key=api_key)
-            # Usamos 'gemini-1.5-pro' que es el modelo flagship actual estable
-            # Si la librería es muy vieja, el fallback será 'gemini-pro'
-            try:
-                self.model = genai.GenerativeModel('gemini-1.5-pro')
-                self.model_name = 'gemini-1.5-pro'
-            except:
-                logger.warning("Modelo 1.5 no encontrado, usando versión legacy estable")
-                self.model = genai.GenerativeModel('gemini-pro')
-                self.model_name = 'gemini-pro'
-        else:
-            self.model = None
-            logger.warning("Gemini API key no configurada")
-    
+        self.api_key = config('GEMINI_API_KEY', default='')
+        if not self.api_key:
+             self.api_key = os.getenv('GEMINI_API_KEY')
+
     def explain_threat(self, positives, total, incident_type):
         """
-        Genera explicación simple del análisis.
+        Genera explicación iterando sobre modelos 2.0 y 1.5.
         """
-        if not self.model:
+        if not self.api_key:
             return self._fallback_explanation(positives, total)
-        
-        try:
-            tipo = "archivo" if incident_type == "file" else "enlace"
-            
-            prompt = f"""
-Actúa como un Analista Senior de Ciberseguridad del CSIRT (Equipo de Respuesta a Incidentes). 
-Tu audiencia es un empleado no técnico (secretaria/administrativo). 
 
-Analiza los siguientes datos técnicos:
-- Tipo de incidencia: {tipo}
-- Motores de detección positivos: {positives} de {total}
+        # 1. Definimos el Prompt (JSON estricto)
+        tipo = "archivo" if incident_type == "file" else "enlace"
+        prompt = f"""Eres un asistente de seguridad.
+Contexto: Se analizó un {tipo} y {positives} de {total} antivirus detectaron amenazas.
 
-Dame UN SOLO PÁRRAFO de advertencia clara, explicando el riesgo real (robo de datos, daño al PC, ransomware) y la acción inmediata a tomar (Borrar/No abrir). 
-
-Tono: Urgente pero profesional. No uses tecnicismos complejos innecesarios.
-
-Formato JSON esperado:
+Tu tarea: Generar un JSON con este formato exacto:
 {{
-  "explicacion": "Texto de la advertencia (Max 30 palabras)",
-  "recomendacion": "Accion concreta (Ej: Borrar ahora)"
-}}
-"""
-            
+  "explicacion": "Resumen de riesgo en 1 frase sencilla (español)",
+  "recomendacion": "Acción recomendada (Borrar/No abrir)"
+}}"""
+
+        # 2. Lista de Modelos (SOLICITUD USUARIO: Prioridad Gemini 2.0 Flash)
+        models_to_try = [
+            "gemini-2.0-flash",         # <--- PRIORIDAD ABSOLUTA (Estándar 2026)
+            "gemini-1.5-flash",         # Fallback por seguridad
+        ]
+        
+        headers = { 'Content-Type': 'application/json' }
+        payload = {
+            "contents": [{ "parts": [{"text": prompt}] }],
+            "generationConfig": { "responseMimeType": "application/json" }
+        }
+
+        # 3. Bucle de Intentos
+        for model_name in models_to_try:
             try:
-                response = self.model.generate_content(prompt)
-                text = response.text.strip()
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
                 
-                # Limpiamos el texto
-                text = text.replace('```json', '').replace('```', '').strip()
-                result = json.loads(text)
+                logger.info(f"🔄 [GEMINI] Probando: {model_name}...")
                 
-                logger.info(f"Gemini ({self.model_name}) respondio: {result.get('explicacion')}")
-                return result
+                response = requests.post(
+                    url, 
+                    headers=headers, 
+                    data=json.dumps(payload),
+                    timeout=10
+                )
+                
+                if response.status_code == 200:
+                    data = response.json()
+                    text_response = data['candidates'][0]['content']['parts'][0]['text']
+                    
+                    # Parsear JSON
+                    result = json.loads(text_response)
+                    logger.info(f"✅ [GEMINI] Éxito con {model_name}")
+                    return result
+                else:
+                    logger.warning(f"⚠️ Falló {model_name}: {response.status_code}")
+                    continue
 
             except Exception as e:
-                logger.warning(f"Fallo modelo {self.model_name}: {e}. Intentando fallback a gemini-pro...")
-                
-                # Fallback a modelo Legacy si falla el Pro
-                secondary_model = genai.GenerativeModel('gemini-pro')
-                response = secondary_model.generate_content(prompt)
-                text = response.text.strip().replace('```json', '').replace('```', '').strip()
-                result = json.loads(text)
-                
-                logger.info(f"Gemini (Legacy) respondio: {result.get('explicacion')}")
-                return result
-            
-        except Exception as e:
-            logger.error(f"Error critico Gemini (Todos los modelos): {e}")
-            return self._fallback_explanation(positives, total)
-    
+                logger.error(f"❌ Error conexión {model_name}: {e}")
+                continue
+
+        # Si todo falla
+        logger.error("[GEMINI] Todos los modelos fallaron.")
+        return self._fallback_explanation(positives, total)
+
     def _fallback_explanation(self, positives, total):
-        """
-        Explicación de respaldo si Gemini falla.
-        """
-        if positives > 15:
-            return {
-                'explicacion': 'Este archivo contiene un virus peligroso que puede dañar la computadora',
-                'recomendacion': 'No lo abras. Reporta este incidente inmediatamente al administrador.'
-            }
-        elif positives > 5:
-            return {
-                'explicacion': 'Varios antivirus detectaron que este archivo es sospechoso',
-                'recomendacion': 'No lo abras hasta que el equipo de seguridad lo revise.'
-            }
-        elif positives > 0:
-            return {
-                'explicacion': 'Algunos antivirus marcaron este archivo como potencialmente riesgoso',
-                'recomendacion': 'Consulta con el equipo de seguridad antes de abrirlo.'
-            }
-        else:
-            return {
-                'explicacion': f'El archivo fue revisado por {total} antivirus y no encontraron amenazas',
-                'recomendacion': 'Es seguro usar este archivo normalmente.'
-            }
+        """Fallback estático si la IA falla."""
+        msg_risk = "Alto riesgo detectado" if positives > 0 else "Archivo limpio"
+        msg_action = "No abrir y borrar" if positives > 0 else "Uso seguro"
+        
+        if positives > 5:
+            msg_risk = "Amenaza crítica confirmada por múltiples motores"
+            msg_action = "Eliminar inmediatamente y reportar"
+            
+        return {
+            "explicacion": msg_risk,
+            "recomendacion": msg_action
+        }

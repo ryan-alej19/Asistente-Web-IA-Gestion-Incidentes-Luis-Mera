@@ -1,8 +1,11 @@
-from rest_framework.decorators import api_view, permission_classes
+from rest_framework.decorators import api_view, permission_classes, authentication_classes
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.authentication import TokenAuthentication
+from django.views.decorators.csrf import csrf_exempt
 from rest_framework.response import Response
 from rest_framework import status
-from .models import Incident
+from .models import Incident, AnalysisCache
+import hashlib
 from .serializers import IncidentSerializer
 from services.virustotal_service import VirusTotalService
 from services.metadefender_service import MetaDefenderService
@@ -11,6 +14,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+@csrf_exempt
+@api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def analyze_file_preview(request):
     """
@@ -23,7 +28,35 @@ def analyze_file_preview(request):
         if not file_obj:
             return Response({'error': 'No se proporcionó archivo'}, status=400)
         
-        logger.info(f"Analizando archivo: {file_obj.name}")
+        # 0. Calcular hash y buscar en CACHÉ
+        file_obj.seek(0)
+        sha256_hash = hashlib.sha256()
+        for chunk in file_obj.chunks():
+            sha256_hash.update(chunk)
+        # 0. Calcular hash y buscar en CACHÉ
+        file_obj.seek(0)
+        sha256_hash = hashlib.sha256()
+        for chunk in file_obj.chunks():
+            sha256_hash.update(chunk)
+        file_hash = sha256_hash.hexdigest()
+        file_obj.seek(0) # Reset pointer
+
+        cached = AnalysisCache.get_cached('file', file_hash)
+        if cached:
+            logger.info(f"[CACHE] ✅ HIT! Usando resultado cacheado para {file_hash[:8]}...")
+            return Response({
+                'risk_level': cached.risk_level,
+                'message': 'PELIGRO' if cached.risk_level in ['CRITICAL', 'HIGH'] else ('Sospechoso' if cached.risk_level == 'MEDIUM' else 'SEGURO'),
+                'detail': f'{cached.positives} de {cached.total} motores detectaron amenazas',
+                'positives': cached.positives,
+                'total': cached.total,
+                'source': f"{cached.source} (Caché)",
+                'gemini_explicacion': cached.gemini_result.get('explicacion', ''),
+                'gemini_recomendacion': cached.gemini_result.get('recomendacion', ''),
+                'cached': True
+            })
+        
+        logger.info(f"[CACHE] ❌ MISS - Iniciando análisis real...")
         
         # Intentamos primero con VirusTotal con proteccion anti-crash
         vt_result = {}
@@ -89,16 +122,44 @@ def analyze_file_preview(request):
         
         detail = f'{positives} de {total} motores detectaron amenazas' if positives > 0 else f'Analizado por {total} motores - Sin amenazas'
         
-        # Análisis explicativo con Gemini (Opcional)
+        # Análisis explicativo con Gemini (REAL, sin fallbacks inventados)
         gemini_explicacion = ''
         gemini_recomendacion = ''
+        gemini_full_result = {}
+
         try:
             gemini_service = GeminiService()
             gemini_result = gemini_service.explain_threat(positives, total, 'file')
+            
             gemini_explicacion = gemini_result.get('explicacion', '')
             gemini_recomendacion = gemini_result.get('recomendacion', '')
+            gemini_full_result = gemini_result
+
+            if gemini_explicacion:
+                logger.info(f"[GEMINI] ✅ Respuesta recibida correctamente")
+            else:
+                logger.warning(f"[GEMINI] ⚠️ Respuesta vacía de la API")
+
         except Exception as e:
-            logger.warning(f"Gemini no disponible: {e}")
+            logger.error(f"[GEMINI] ❌ ERROR CON API: {e}")
+            gemini_explicacion = "⚠️ Error de conexión con IA."
+            gemini_recomendacion = "Verifique su conexión a internet."
+
+        # GUARDAR EN CACHÉ
+        try:
+            AnalysisCache.store('file', file_hash, {
+                'file_hash': file_hash,
+                'file_name': file_obj.name,
+                'virustotal_result': vt_result,
+                'gemini_result': gemini_full_result,
+                'risk_level': risk,
+                'positives': positives,
+                'total': total,
+                'source': source_used
+            })
+            logger.info(f"[CACHE] 💾 Resultado guardado para futuro uso")
+        except Exception as e:
+            logger.error(f"[CACHE] Error guardando: {e}")
         
         return Response({
             'risk_level': risk,
@@ -116,6 +177,7 @@ def analyze_file_preview(request):
         return Response({'error': str(e)}, status=500)
 
 
+@csrf_exempt
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def analyze_url_preview(request):
@@ -129,6 +191,25 @@ def analyze_url_preview(request):
             return Response({'error': 'No se proporcionó URL'}, status=400)
         
         logger.info(f"Analizando URL: {url}")
+
+        # 0. Buscar en CACHÉ
+        cached = AnalysisCache.get_cached('url', url)
+        if cached:
+            logger.info(f"[CACHE] ✅ HIT! Usando resultado cacheado para URL...")
+            return Response({
+                'risk_level': cached.risk_level,
+                'message': 'PELIGRO' if cached.risk_level in ['CRITICAL', 'HIGH'] else ('Sospechoso' if cached.risk_level == 'MEDIUM' else 'SEGURO'),
+                'detail': f'{cached.positives} de {cached.total} motores detectaron amenazas',
+                'virustotal': cached.virustotal_result,
+                'source': f"{cached.source} (Caché)",
+                'gemini_explicacion': cached.gemini_result.get('explicacion', ''),
+                'gemini_recomendacion': cached.gemini_result.get('recomendacion', ''),
+                'positives': cached.positives,
+                'total': cached.total,
+                'cached': True
+            })
+        
+        logger.info(f"[CACHE] ❌ MISS - Iniciando análisis real...")
         
         # Variables para el resultado unificado
         positives = 0
@@ -216,18 +297,40 @@ def analyze_url_preview(request):
                 
             detail = f'{positives} de {total} motores detectaron amenazas' if positives > 0 else f'Analizado por {total} motores - Sin amenazas'
 
-        # 4. Gemini (Explicacion Humana para CUALQUIER resultado)
+        # 4. Gemini (REAL)
         gemini_explicacion = ''
         gemini_recomendacion = ''
+        gemini_full_result = {}
+
         try:
             gemini_service = GeminiService()
-            # Pasamos positives/total unificados
             gemini_result = gemini_service.explain_threat(positives, total, 'url')
+            
             if gemini_result:
                 gemini_explicacion = gemini_result.get('explicacion', '')
                 gemini_recomendacion = gemini_result.get('recomendacion', '')
+                gemini_full_result = gemini_result
+                logger.info(f"[GEMINI] ✅ Respuesta exitosa para URL")
+
         except Exception as e:
-            logger.warning(f"Gemini no disponible: {e}")
+             logger.error(f"[GEMINI] ❌ Error URL: {e}")
+             gemini_explicacion = "⚠️ Análisis IA temporalmente no disponible."
+             gemini_recomendacion = "Proceda con cautela basándose en los resultados de antivirus."
+
+        # GUARDAR EN CACHÉ
+        try:
+            AnalysisCache.store('url', url, {
+                'url': url,
+                'virustotal_result': vt_data,
+                'gemini_result': gemini_full_result,
+                'risk_level': risk,
+                'positives': positives,
+                'total': total,
+                'source': source_used
+            })
+            logger.info(f"[CACHE] 💾 URL guardada en caché")
+        except Exception as e:
+            logger.error(f"[CACHE] Error guardando URL: {e}")
         
         return Response({
             'risk_level': risk,

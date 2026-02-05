@@ -1,9 +1,21 @@
-*.pyc
+
+# Python
 __pycache__/
-db.sqlite3
+*.py[cod]
+*$py.class
+backend/venv/
+venv/
+env/
 .env
-backend/.env
-.venv/
+
+# Django
+*.log
+local_settings.py
+db.sqlite3
+media
+staticfiles
+
+# Node
 node_modules/
-backend/media/
-backend/staticfiles/
+build/
+.DS_Store
