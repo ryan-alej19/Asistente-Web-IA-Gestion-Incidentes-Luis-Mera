@@ -10,9 +10,52 @@ from .serializers import IncidentSerializer
 from services.virustotal_service import VirusTotalService
 from services.metadefender_service import MetaDefenderService
 from services.gemini_service import GeminiService
+from incidents.heuristic_classifier import HeuristicClassifier
 import logging
+import zipfile
 
 logger = logging.getLogger(__name__)
+
+def is_encrypted_archive(file_obj):
+    """
+    Verifica si un archivo comprimido está protegido con contraseña.
+    """
+    try:
+        file_obj.seek(0)
+        
+        # Verificar extensión
+        filename = file_obj.name.lower()
+        
+        if filename.endswith('.zip'):
+            with zipfile.ZipFile(file_obj, 'r') as zip_ref:
+                # Intentar listar contenido
+                namelist = zip_ref.namelist()
+                
+                if not namelist:
+                    return False
+                
+                # Verificar si algún archivo está encriptado
+                for file_info in zip_ref.infolist():
+                    if file_info.flag_bits & 0x1:  # Bit 0 = encrypted
+                        logger.info(f"[ZIP] Archivo cifrado detectado: {file_info.filename}")
+                        return True
+                
+                return False
+        
+        # Para RAR, 7z: solo verificar por extensión (no tenemos librería)
+        elif filename.endswith(('.rar', '.7z')):
+            # Heurística: archivos RAR/7z pequeños suelen ser cifrados
+            return True  # Conservador
+        
+        return False
+        
+    except zipfile.BadZipFile:
+        return False
+    except Exception as e:
+        logger.error(f"[ZIP] Error verificando cifrado: {e}")
+        return False
+    finally:
+        file_obj.seek(0)
 
 @csrf_exempt
 @api_view(['POST'])
@@ -28,6 +71,25 @@ def analyze_file_preview(request):
         if not file_obj:
             return Response({'error': 'No se proporcionó archivo'}, status=400)
         
+        # VERIFICAR SI ES ZIP CIFRADO PRIMERO
+        try:
+            if is_encrypted_archive(file_obj):
+                logger.warning(f"[ZIP] Archivo cifrado detectado: {file_obj.name}")
+                
+                # RETORNAR INMEDIATAMENTE - NO CONTINUAR CON ANÁLISIS
+                return Response({
+                    'risk_level': 'UNKNOWN',
+                    'message': 'Análisis Restringido',
+                    'detail': 'Archivo protegido con contraseña',
+                    'encrypted': True,
+                    'source': 'Verificación Local',
+                    'positives': 0,
+                    'total': 0
+                })
+        except Exception as e:
+            logger.error(f"Error verificando cifrado: {e}")
+            # Continuamos si falla la verificación
+
         # 0. Calcular hash y buscar en CACHÉ
         file_obj.seek(0)
         sha256_hash = hashlib.sha256()
@@ -120,6 +182,27 @@ def analyze_file_preview(request):
             risk = 'LOW'
             message = 'SEGURO'
         
+        # ANÁLISIS HEURÍSTICO
+        try:
+            heuristic = HeuristicClassifier.analyze_file(
+                filename=file_obj.name,
+                file_size=file_obj.size,
+                vt_positives=positives,
+                vt_total=total
+            )
+            
+            logger.info(f"[HEURISTIC] Score: {heuristic['score']}/100")
+            
+            # Si la heurística detecta alto riesgo pero VT no, elevamos alerta
+            if heuristic['classification'] in ['CRITICAL', 'HIGH'] and risk in ['LOW', 'MEDIUM']:
+                risk = heuristic['classification']
+                message = "Riesgo Heurístico Detectado"
+                logger.warning(f"[HEURISTIC] Elevando riesgo a {risk}")
+
+        except Exception as e:
+            logger.error(f"[HEURISTIC] Error: {e}")
+            heuristic = {'score': 0, 'reasons': []}
+        
         detail = f'{positives} de {total} motores detectaron amenazas' if positives > 0 else f'Analizado por {total} motores - Sin amenazas'
         
         # Análisis explicativo con Gemini (REAL, sin fallbacks inventados)
@@ -169,7 +252,9 @@ def analyze_file_preview(request):
             'total': total,
             'source': source_used,
             'gemini_explicacion': gemini_explicacion,
-            'gemini_recomendacion': gemini_recomendacion
+            'gemini_recomendacion': gemini_recomendacion,
+            'heuristic_score': heuristic['score'],
+            'heuristic_reasons': heuristic['reasons']
         })
         
     except Exception as e:
