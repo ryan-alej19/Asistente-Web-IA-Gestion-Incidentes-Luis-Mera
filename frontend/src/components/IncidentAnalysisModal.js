@@ -64,7 +64,7 @@ function IncidentAnalysisModal({ incident, onClose, onUpdate }) {
     <div className="fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4 animate-fade-in backdrop-blur-sm">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
 
-        {/* HEADER */}
+        {/* ENCABEZADO */}
         <div className="p-6 border-b border-slate-100 flex justify-between items-start bg-slate-50">
           <div>
             <div className="flex items-center gap-3 mb-2">
@@ -81,7 +81,7 @@ function IncidentAnalysisModal({ incident, onClose, onUpdate }) {
           </button>
         </div>
 
-        {/* CONTENT - SCROLLABLE */}
+        {/* CONTENIDO - CON SCROLL */}
         <div className="flex-1 overflow-y-auto p-6 space-y-6">
 
           {/* 1. DESCRIPCIÓN */}

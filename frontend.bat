@@ -10,5 +10,5 @@ if not exist "node_modules" (
 )
 
 echo Iniciando Frontend React...
-npm start
+"C:\Program Files\nodejs\npm.cmd" start
 pause

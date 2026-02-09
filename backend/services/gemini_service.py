@@ -1,25 +1,30 @@
-import requests
-import json
-import os
 import logging
 from decouple import config
+import json
+import requests
 
 logger = logging.getLogger(__name__)
 
 class GeminiService:
-    """
-    Servicio de análisis con Google Gemini (Estrategia 2026).
-    Usa API REST directa y modelos Serie 2.0 para evitar 404s.
-    """
-    
+    _initialized = False
+
     def __init__(self):
         self.api_key = config('GEMINI_API_KEY', default='')
         if not self.api_key:
              self.api_key = os.getenv('GEMINI_API_KEY')
-
-    def explain_threat(self, positives, total, incident_type):
+        
         if not self.api_key:
-            return self._fallback_explanation(positives, total)
+            logger.warning("[GEMINI] API key no configurada")
+            self.available = False
+        else:
+            self.available = True
+            if not GeminiService._initialized:
+                logger.info("[GEMINI] Servicio inicializado correctamente")
+                GeminiService._initialized = True
+
+    def explain_threat(self, positives, total, incident_type, resource_name="Desconocido"):
+        if not self.available:
+            return self._fallback_explanation(positives, total, incident_type)
         
         try:
             tipo = "archivo" if incident_type == "file" else "enlace web"
@@ -90,6 +95,7 @@ GENERA LA RESPUESTA:"""
             
             # Lista de modelos (Prioridad 2026)
             models_to_try = [
+                "gemini-2.5-flash",
                 "gemini-2.0-flash",
                 "gemini-1.5-flash",
             ]
@@ -133,16 +139,19 @@ GENERA LA RESPUESTA:"""
                     continue
 
             logger.error("[GEMINI] Todos los modelos fallaron.")
-            return self._fallback_explanation(positives, total)
+            return self._fallback_explanation(positives, total, incident_type)
             
         except Exception as e:
             logger.error(f"[GEMINI] Error general: {str(e)}")
-            return self._fallback_explanation(positives, total)
+            return self._fallback_explanation(positives, total, incident_type)
 
-    def _fallback_explanation(self, positives, total):
+    def _fallback_explanation(self, positives, total, incident_type='file'):
         """
         Explicaciones de respaldo DETALLADAS (no genéricas).
         """
+        item_name = "este archivo" if incident_type == 'file' else "este enlace web"
+        action_name = "abrirlo" if incident_type == 'file' else "visitarlo"
+        
         if positives > 50:
             return {
                 'explicacion': f'Este archivo fue identificado como muy peligroso por {positives} empresas de seguridad profesionales. Contiene programas maliciosos que pueden robar información personal, contraseñas bancarias, o bloquear todos los archivos de la computadora exigiendo un pago.',

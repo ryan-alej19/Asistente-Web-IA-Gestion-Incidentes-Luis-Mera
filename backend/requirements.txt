@@ -4,3 +4,5 @@ django-cors-headers
 python-decouple
 requests
 google-generativeai>=0.7.0
+reportlab>=4.0.0
+Pillow>=10.0.0

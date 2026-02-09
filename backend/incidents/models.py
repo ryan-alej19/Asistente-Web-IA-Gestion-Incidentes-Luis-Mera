@@ -2,10 +2,7 @@ from django.db import models
 from django.contrib.auth.models import User
 
 class Incident(models.Model):
-    """
-    Modelo para almacenar incidentes de seguridad reportados.
-    Cada incidente puede ser una URL o un archivo sospechoso.
-    """
+    # Tabla para guardar los incidentes (archivos o links reportados)
     
     RISK_LEVELS = [
         ('LOW', 'Bajo'),
@@ -26,21 +23,22 @@ class Incident(models.Model):
         ('file', 'Archivo'),
     ]
     
-    # Campos basicos
+    # Informacion basica
     incident_type = models.CharField(max_length=10, choices=TYPE_CHOICES)
     url = models.URLField(blank=True, null=True)
     attached_file = models.FileField(upload_to='incidents/', blank=True, null=True)
     description = models.TextField(blank=True, default='')
     
-    # Resultados de analisis
+    # Resultados del analisis (VirusTotal, IA, etc)
     risk_level = models.CharField(max_length=10, choices=RISK_LEVELS, default='UNKNOWN')
     virustotal_result = models.JSONField(blank=True, null=True)
     phishtank_result = models.JSONField(blank=True, null=True)
     metadefender_result = models.JSONField(blank=True, null=True)
     gemini_analysis = models.TextField(blank=True, default='')
     
-    # Metadatos
+    # Datos de control
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    analyst_notes = models.TextField(blank=True, default='')  # Notas del tecnico
     reported_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='incidents')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -57,9 +55,8 @@ import hashlib
 from django.utils import timezone
 
 class AnalysisCache(models.Model):
-    """
-    Caché de resultados de análisis para evitar consultas repetidas a APIs.
-    """
+    # Guardo aqui los analisis antiguos para no gastar peticiones a la API
+    # Si alguien busca lo mismo, se lo doy de aqui rapido
     
     TYPE_CHOICES = [
         ('url', 'URL'),

@@ -1,8 +1,14 @@
-import os
 from pathlib import Path
 from decouple import config
+from dotenv import load_dotenv 
+import os
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Cargar .env explicito y FORZAR sobreescritura de variables del sistema
+# Esto soluciona el problema de que Windows recuerde variables viejas
+env_path = BASE_DIR / '.env'
+load_dotenv(dotenv_path=env_path, override=True)
 
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
@@ -10,6 +16,13 @@ WSGI_APPLICATION = 'config.wsgi.application'
 SECRET_KEY = config('SECRET_KEY', default='django-insecure-dev-key')
 
 DEBUG = config('DEBUG', default=True, cast=bool)
+
+# API KEYS
+VIRUSTOTAL_API_KEY = config('VIRUSTOTAL_API_KEY', default=None)
+METADEFENDER_API_KEY = config('METADEFENDER_API_KEY', default=None)
+GEMINI_API_KEY = config('GEMINI_API_KEY', default=None)
+# Si no hay key especifica para GSB, usamos la de Gemini (Son la misma en Google Cloud)
+GSB_API_KEY = config('GOOGLE_SAFE_BROWSING_API_KEY', default=GEMINI_API_KEY)
 
 ALLOWED_HOSTS = ['localhost', '127.0.0.1', '.onrender.com']
 
@@ -89,3 +102,35 @@ TEMPLATES = [
         },
     },
 ]
+
+# LOGGING: Mostrar INFO en consola para debugging
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': 'INFO',
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'incidents': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'services': {
+            'handlers': ['console'],
+            'level': 'INFO',
+            'propagate': True,
+        },
+    },
+}

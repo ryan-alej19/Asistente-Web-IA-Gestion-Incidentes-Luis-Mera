@@ -7,22 +7,18 @@ from decouple import config
 logger = logging.getLogger(__name__)
 
 class VirusTotalService:
-    """
-    Servicio para analizar URLs y archivos con VirusTotal API v2.
-    Maneja busqueda por hash y subida de archivos nuevos.
-    """
+    # Servicio para analizar enlaces y archivos con VirusTotal
+    # Permite buscar si ya fue analizado o subir un archivo nuevo
     
     def __init__(self):
         self.api_key = config('VIRUSTOTAL_API_KEY', default='')
         self.base_url = 'https://www.virustotal.com/vtapi/v2'
     
     def analyze_url(self, url):
-        """
-        Analiza una URL con VirusTotal.
-        Retorna diccionario con positives, total, y permalink.
-        """
+        # Manda una URL a VirusTotal para ver si es segura
+        # Devuelve cuantos antivirus dicen que es peligroso
         if not self.api_key:
-            return {'error': 'API key no configurada'}
+            return {'error': 'Falta la clave de API'}
         
         try:
             # Escanear URL
@@ -32,47 +28,78 @@ class VirusTotalService:
             response = requests.post(scan_url, data=params)
             scan_data = response.json()
             
-            # Obtener reporte
+            # Obtener el reporte
             report_url = f"{self.base_url}/url/report"
             params = {'apikey': self.api_key, 'resource': url}
             
-            # Esperar resultado (max 60 seg, 12 intentos)
+            # Espero el resultado (intento varias veces por si tarda)
             for attempt in range(12):
                 time.sleep(5)
                 report_response = requests.get(report_url, params=params)
                 
-                # Manejo explícito de Cuota Excedida (204 No Content o 429 Too Many Requests)
+                # Si me pase del limite de uso gratuito
                 if report_response.status_code in [204, 429]:
-                    logger.info(f"Límite de cuota VirusTotal alcanzado ({report_response.status_code}).")
-                    return {'error': 'Quota Exceeded'}
+                    logger.info(f"Se acabo la cuota gratuita de VirusTotal ({report_response.status_code}).")
+                    return {'error': 'Limite excedido'}
                 
                 report_data = report_response.json()
                 
-                # response_code 1: Analizado. -2: En cola/analizando.
+                # Codigo 1 significa que ya termino de analizar
                 if report_data.get('response_code') == 1:
                     return {
                         'positives': report_data.get('positives', 0),
                         'total': report_data.get('total', 0),
                         'permalink': report_data.get('permalink', ''),
                         'scan_date': report_data.get('scan_date', ''),
+                        'link': report_data.get('permalink', ''),
                     }
                 elif report_data.get('response_code') == -2:
-                    logger.info(f"VirusTotal analizando... Intento {attempt+1}/12")
+                    logger.info(f"VirusTotal todavia esta analizando... Intento {attempt+1}")
                     continue
             
-            return {'error': 'Timeout esperando resultado (Scanning loop)'}
+            return {'error': 'Tardo demasiado tiempo'}
             
         except Exception as e:
             logger.error(f"Error en VirusTotal: {e}")
             return {'error': str(e)}
+
+    def analyze_file_hash(self, file_hash):
+        # Analiza un archivo por su hash (sin subirlo)
+        if not self.api_key:
+            return {'error': 'Falta la clave de API'}
+
+        try:
+            logger.info(f"Analizando archivo con hash: {file_hash}")
+            
+            # Buscar por hash
+            report_url = f"{self.base_url}/file/report"
+            params = {'apikey': self.api_key, 'resource': file_hash}
+            
+            report_response = requests.get(report_url, params=params)
+            report_data = report_response.json()
+            
+            # Si existe reporte
+            if report_data.get('response_code') == 1:
+                logger.info(f"Archivo ya analizado: {report_data.get('positives')}/{report_data.get('total')}")
+                return {
+                    'positives': report_data.get('positives', 0),
+                    'total': report_data.get('total', 0),
+                    'permalink': report_data.get('permalink', ''),
+                    'scan_date': report_data.get('scan_date', ''),
+                    'link': report_data.get('permalink', ''),
+                }
+            else:
+                return {'error': 'Archivo no encontrado en VirusTotal (requiere subida)'}
+                
+        except Exception as e:
+             logger.error(f"Error analizando hash VT: {e}")
+             return {'error': str(e)}
     
     def analyze_file(self, file_obj):
-        """
-        Analiza un archivo con VirusTotal.
-        Primero busca por hash, si no existe lo sube.
-        """
+        # Analiza un archivo
+        # Primero reviso si ya existe por su hash, sino lo subo
         if not self.api_key:
-            return {'error': 'API key no configurada'}
+            return {'error': 'Falta la clave de API'}
         
         try:
             # Calcular hash SHA-256
@@ -135,6 +162,7 @@ class VirusTotalService:
                                 'total': report_data.get('total', 0),
                                 'permalink': report_data.get('permalink', ''),
                                 'scan_date': report_data.get('scan_date', ''),
+                                'link': report_data.get('permalink', ''),
                             }
                         elif code == -2:
                              logger.info(f"VirusTotal analizando archivo... Intento {attempt+1}")

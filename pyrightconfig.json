@@ -1,0 +1,11 @@
+{
+    "executionEnvironments": [
+        {
+            "root": "backend"
+        }
+    ],
+    "extraPaths": [
+        "backend",
+        "backend/venv/Lib/site-packages"
+    ]
+}
