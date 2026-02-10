@@ -2,6 +2,7 @@ import logging
 from decouple import config
 import json
 import requests
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -10,8 +11,6 @@ class GeminiService:
 
     def __init__(self):
         self.api_key = config('GEMINI_API_KEY', default='')
-        if not self.api_key:
-             self.api_key = os.getenv('GEMINI_API_KEY')
         
         if not self.api_key:
             logger.warning("[GEMINI] API key no configurada")
@@ -21,7 +20,7 @@ class GeminiService:
             if not GeminiService._initialized:
                 logger.info("[GEMINI] Servicio inicializado correctamente")
                 GeminiService._initialized = True
-
+    
     def explain_threat(self, positives, total, incident_type, resource_name="Desconocido"):
         if not self.available:
             return self._fallback_explanation(positives, total, incident_type)
@@ -30,150 +29,122 @@ class GeminiService:
             tipo = "archivo" if incident_type == "file" else "enlace web"
             porcentaje = round((positives / total * 100), 1) if total > 0 else 0
             
-            # Contexto más específico
+            # Determinar nivel de riesgo
             if positives > 50:
-                contexto = f"MUY PELIGROSO: {positives} de {total} antivirus profesionales (empresas como Microsoft, Kaspersky, Norton) detectaron este {tipo} como malware"
+                nivel = "CRITICO"
             elif positives > 15:
-                contexto = f"PELIGROSO: {positives} de {total} antivirus profesionales detectaron amenazas en este {tipo}"
+                nivel = "ALTO"
             elif positives > 5:
-                contexto = f"SOSPECHOSO: {positives} de {total} antivirus alertaron sobre este {tipo}"
+                nivel = "MEDIO"
             elif positives > 0:
-                contexto = f"PRECAUCIÓN: {positives} de {total} antivirus tienen dudas sobre este {tipo}"
+                nivel = "BAJO"
             else:
-                contexto = f"SEGURO: Los {total} antivirus profesionales revisaron este {tipo} y NO encontraron nada malo"
+                nivel = "SEGURO"
             
-            prompt = f"""Eres un analista de ciberseguridad senior del CSIRT ecuatoriano explicando a personal administrativo de una PYME.
+            prompt = f"""Actúa como un Analista de Ciberseguridad Profesional. Analiza el siguiente recurso: '{resource_name}'
 
-CONTEXTO:
-{contexto}
+CONTEXTO TÉCNICO:
+- Tipo: {tipo.upper()}
+- Detecciones: {positives} de {total} motores de seguridad lo marcan como malicioso.
+- Nivel de Riesgo Calculado: {nivel} ({porcentaje}%)
 
-SITUACIÓN:
-Una secretaria de 45 años, sin conocimientos técnicos, acaba de recibir este {tipo} por correo y está a punto de abrirlo. Ella NO entiende términos como "malware", "exploit", "ransomware", "phishing".
+INSTRUCCIONES DE ANÁLISIS (Sigue este orden lógico):
 
-TU TRABAJO:
-Explicarle en 2-3 oraciones CONCRETAS qué es esta amenaza y qué puede pasar si lo abre.
+1. VALIDACIÓN DE INPUT (Crucial):
+   - Si el recurso '{resource_name}' NO es una URL válida, dirección IP, dominio o nombre de archivo técnico (ej: es un saludo como "hola", letras al azar "asdf", o nombres propios), DEBES responder que el input no es válido para análisis de seguridad.
+   - NO inventes amenazas sobre texto basura.
 
-EJEMPLOS DE EXPLICACIONES BUENAS:
+2. WHITELISTING (Sitios Conocidos):
+   - Si es un dominio oficial y legítimo (ej: google.com, facebook.com, microsoft.com), confírmalo inmediatamente como SEGURO, independientemente de falsos positivos menores.
 
-Para archivo PELIGROSO:
-"Este archivo contiene un programa malicioso que puede robar sus contraseñas del banco, bloquear todos los archivos de la computadora pidiendo un rescate en dinero, o permitir que delincuentes vean todo lo que hace en su computadora."
+3. ANÁLISIS DE AMENAZAS:
+   - Si es un archivo comprimido (.zip, .rar, .7z) y tiene POCAS detecciones (0-2), DEBES ADVERTIR que el contenido podría estar cifrado con contraseña y ocultar malware. Recomienda NO abrir si no se confía en el origen.
+   - Si es un recurso válido y desconocido, basa tu veredicto en las {positives} detecciones.
+   - Explica técnicamente qué implica (Phishing, Malware, etc.) si hay detecciones.
 
-Para archivo SOSPECHOSO:
-"Este archivo tiene características que varios antivirus consideran riesgosas. Podría intentar instalar programas no deseados o modificar configuraciones importantes de la computadora sin su permiso."
-
-Para archivo SEGURO:
-"Este archivo fue revisado por {total} empresas de seguridad profesionales (como las que protegen bancos y hospitales) y ninguna encontró programas maliciosos. Es seguro abrirlo."
-
-EJEMPLOS DE EXPLICACIONES MALAS (NO HAGAS ESTO):
-❌ "El archivo es altamente sospechoso y probablemente malicioso"
-❌ "Presenta características de malware"
-❌ "Se recomienda precaución"
-
-RECOMENDACIONES BUENAS:
-
-Para PELIGROSO:
-"NO abra este archivo bajo ninguna circunstancia. Elimínelo inmediatamente de su correo y de la papelera. Avise al encargado de sistemas que recibió un archivo peligroso."
-
-Para SOSPECHOSO:
-"NO abra este archivo todavía. Reenvíelo al encargado de sistemas o al administrador para que lo revise con herramientas especializadas antes de abrirlo."
-
-Para SEGURO:
-"Puede abrir este archivo con tranquilidad. Fue verificado por múltiples sistemas de seguridad profesionales."
-
-RECOMENDACIONES MALAS (NO HAGAS ESTO):
-❌ "Borrar"
-❌ "Tener precaución"
-❌ "Consultar con TI"
-
-AHORA GENERA TU RESPUESTA EN JSON:
+FORMATO DE RESPUESTA (JSON PURO):
 {{
-  "explicacion": "2-3 oraciones CONCRETAS explicando qué es y qué puede hacer",
-  "recomendacion": "Instrucción ESPECÍFICA y ACCIONABLE de qué hacer paso por paso"
+    "explicacion": "Análisis profesional y objetivo (2-3 frases). Si el input es inválido, indícalo. Si es un sitio conocido, confírmalo.",
+    "recomendacion": "Acción recomendada. Ej: 'Navegar con confianza', 'Bloquear acceso', 'Ingresar una URL válida'."
 }}
 
-GENERA LA RESPUESTA:"""
+Responde ÚNICAMENTE con el objeto JSON válido."""
             
-            # Lista de modelos (Prioridad 2026)
-            models_to_try = [
-                "gemini-2.5-flash",
-                "gemini-2.0-flash",
-                "gemini-1.5-flash",
-            ]
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.api_key}"
             
-            headers = { 'Content-Type': 'application/json' }
             payload = {
-                "contents": [{ "parts": [{"text": prompt}] }],
-                "generationConfig": { 
-                    "responseMimeType": "application/json",
-                    "temperature": 0.7,
-                    "maxOutputTokens": 400
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {
+                    "temperature": 0.9,
+                    "maxOutputTokens": 2048
                 }
             }
-
-            for model_name in models_to_try:
-                try:
-                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={self.api_key}"
-                    logger.info(f"🔄 [GEMINI] Probando: {model_name}...")
-                    
-                    response = requests.post(url, headers=headers, data=json.dumps(payload), timeout=10)
-                    
-                    if response.status_code == 200:
-                        data = response.json()
-                        text_response = data['candidates'][0]['content']['parts'][0]['text']
-                        result = json.loads(text_response)
-                        
-                        # VALIDACIÓN ESTRICTA
-                        explicacion = result.get('explicacion', '').strip()
-                        recomendacion = result.get('recomendacion', '').strip()
-                        
-                        if len(explicacion) < 30:
-                             logger.warning(f"[GEMINI] Explicación corta: {explicacion}")
-                        
-                        logger.info(f"✅ [GEMINI] Éxito con {model_name}")
-                        return result
-                    else:
-                        logger.warning(f"⚠️ Falló {model_name}: {response.status_code}")
-                        continue
-                except Exception as e:
-                    logger.error(f"❌ Error conexión {model_name}: {e}")
-                    continue
-
-            logger.error("[GEMINI] Todos los modelos fallaron.")
-            return self._fallback_explanation(positives, total, incident_type)
+            
+            response = requests.post(url, json=payload, timeout=30)
+            
+            if response.status_code != 200:
+                logger.error(f"[GEMINI] API error: {response.status_code}")
+                return self._fallback_explanation(positives, total, incident_type)
+            
+            data = response.json()
+            text = data['candidates'][0]['content']['parts'][0]['text'].strip()
+            
+            # Limpiar markdown
+            text = text.replace('```json', '').replace('```', '').strip()
+            if text.startswith('json'):
+                text = text[4:].strip()
+            
+            # Intentar parsear JSON
+            try:
+                result = json.loads(text)
+            except json.JSONDecodeError as e:
+                logger.error(f"[GEMINI] Error JSON: {e} - Texo recibido: {text[:50]}...")
+                # Intento de corrección simple (si faltan llaves)
+                if '{' in text and '}' not in text:
+                    text += '}"}' # Intento desesperado de cerrar
+                    try: result = json.loads(text)
+                    except: return self._fallback_explanation(positives, total, incident_type)
+                else:
+                    return self._fallback_explanation(positives, total, incident_type)
+            
+            if len(result.get('explicacion', '')) < 30: # Bajamos umbral, a veces explicaciones cortas son validas
+                 logger.warning("[GEMINI] Explicacion muy corta, usando fallback")
+                 return self._fallback_explanation(positives, total, incident_type)
+            
+            logger.info("[GEMINI] Analisis generado correctamente")
+            return result
             
         except Exception as e:
-            logger.error(f"[GEMINI] Error general: {str(e)}")
+            logger.error(f"[GEMINI] Error General en explain_threat: {str(e)}")
             return self._fallback_explanation(positives, total, incident_type)
-
+    
     def _fallback_explanation(self, positives, total, incident_type='file'):
-        """
-        Explicaciones de respaldo DETALLADAS (no genéricas).
-        """
+        """Explicaciones de respaldo cuando Gemini falla"""
         item_name = "este archivo" if incident_type == 'file' else "este enlace web"
         action_name = "abrirlo" if incident_type == 'file' else "visitarlo"
         
         if positives > 50:
             return {
-                'explicacion': f'Este archivo fue identificado como muy peligroso por {positives} empresas de seguridad profesionales. Contiene programas maliciosos que pueden robar información personal, contraseñas bancarias, o bloquear todos los archivos de la computadora exigiendo un pago.',
-                'recomendacion': 'NO abra este archivo bajo ninguna circunstancia. Elimínelo inmediatamente del correo y de la papelera de reciclaje. Avise al encargado de sistemas que recibió un archivo peligroso por correo.'
+                'explicacion': f'{item_name.capitalize()} fue identificado como muy peligroso por {positives} empresas de seguridad. Puede robar informacion o dañar el sistema.',
+                'recomendacion': f'NO intente {action_name}. Reportelo inmediatamente.'
             }
         elif positives > 15:
             return {
-                'explicacion': f'Este archivo fue marcado como peligroso por {positives} de {total} antivirus profesionales. Puede contener programas que roban información, instalan virus, o permiten que personas externas accedan a la computadora sin permiso.',
-                'recomendacion': 'NO abra este archivo. Elimínelo de su correo inmediatamente y avise al administrador de sistemas o al encargado de tecnología de su empresa.'
+                'explicacion': f'{item_name.capitalize()} fue marcado como peligroso por {positives} de {total} motores. Es muy probable que sea malicioso.',
+                'recomendacion': f'NO {action_name}. Eliminelo o cierre la ventana.'
             }
         elif positives > 5:
             return {
-                'explicacion': f'Este archivo levantó alertas en {positives} sistemas de seguridad. Podría intentar modificar configuraciones de la computadora, instalar programas no deseados, o acceder a información sin su permiso.',
-                'recomendacion': 'NO abra este archivo todavía. Reenvíelo al encargado de sistemas para que lo revise con herramientas especializadas antes de abrirlo.'
+                'explicacion': f'{item_name.capitalize()} levanto alertas en {positives} sistemas. Podria ser riesgoso.',
+                'recomendacion': f'Evite {action_name} si no confia en la fuente.'
             }
         elif positives > 0:
             return {
-                'explicacion': f'Este archivo tiene algunas características que {positives} antivirus consideran sospechosas, aunque la mayoría ({total - positives}) no encontró problemas graves.',
-                'recomendacion': 'Por precaución, consulte con el encargado de sistemas antes de abrir este archivo, especialmente si no estaba esperándolo o viene de un remitente desconocido.'
+                'explicacion': f'{item_name.capitalize()} tiene caracteristicas sospechosas para {positives} motores, aunque la mayoria lo considera seguro.',
+                'recomendacion': 'Proceda con precaucion.'
             }
         else:
             return {
-                'explicacion': f'Este archivo fue revisado por {total} empresas de seguridad profesionales (las mismas que protegen bancos, hospitales y gobiernos) y ninguna encontró programas maliciosos o peligrosos.',
-                'recomendacion': 'Puede abrir este archivo con tranquilidad. Fue verificado exhaustivamente y es seguro.'
+                'explicacion': f'{item_name.capitalize()} fue revisado por {total} empresas de seguridad y ninguna encontro amenazas.',
+                'recomendacion': f'Es seguro {action_name}.'
             }

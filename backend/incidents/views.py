@@ -95,12 +95,6 @@ def analyze_file_preview(request):
             logger.error(f"Error verificando cifrado: {e}")
             # Continuamos si falla la verificación
 
-        # 0. Calcular hash y buscar en CACHÉ
-        file_obj.seek(0)
-        sha256_hash = hashlib.sha256()
-        for chunk in file_obj.chunks():
-            sha256_hash.update(chunk)
-        file_hash = sha256_hash.hexdigest()
         file_obj.seek(0) # Reset pointer
         
         logger.info(f"Analizando archivo (Hash: {file_hash})")
@@ -127,6 +121,16 @@ def analyze_file_preview(request):
             except Exception as e:
                 logger.warning(f"[MD] Fallo: {e}")
                 return {'error': str(e)}
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+            future_vt = executor.submit(safe_vt_scan, file_hash)
+            future_md = executor.submit(safe_md_scan, file_hash)
+            
+            vt_result = future_vt.result()
+            md_result = future_md.result()
+        
+        # Heurístico Local
+        heuristic_result = heuristic_service.analyze_file(file_obj.name, file_obj.size)
         
         # Combinar resultados
         engines = []
@@ -254,49 +258,45 @@ def analyze_url_preview(request):
         
         
         # Validacion Previa e Inteligente
-        # Si el input es claramente invalido (ej: "hola mi amor", tiene espacios, sin TLD), saltamos los motores
         import re
-        # Regla simple: no debe tener espacios, debe tener al menos un punto (.) o ser localhost
-        is_valid_structure = IsAuthenticated # Falso positivo linter, ignorar
-        status_msg = "URL Válida"
+        from urllib.parse import urlparse
+
+        # Regex robusto para validar URLs (http/https opcional, dominio requerido)
+        # Soporta: google.com, www.google.com, http://google.com
+        # Rechaza: .xyz, hola, test, 123
+        url_pattern = re.compile(
+            r'^(?:http|ftp)s?://' # http:// or https://
+            r'|' # OR
+            r'(?:(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|' # domain...
+            r'localhost|' # localhost...
+            r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})' # ...or ip
+            r'(?::\d+)?' # optional port
+            r'(?:/?|[/?]\S+)$', re.IGNORECASE)
+
+        is_valid_structure = url_pattern.match(url.strip())
         
-        # Regex básico para validar estructura de URL/Dominio (sin espacios, con punto)
-        if ' ' in url.strip() or '.' not in url.strip():
-             # Es texto plano o invalido
-             is_valid_structure = False
-             status_msg = "Formato Inválido"
-        else:
-             is_valid_structure = True
-             
+        # Validaciones adicionales anti-basura
+        if is_valid_structure:
+            parsed = urlparse(url if url.startswith(('http', 'https')) else f'http://{url}')
+            if not parsed.netloc and not parsed.path: 
+                 is_valid_structure = False
+            if '.' not in url and 'localhost' not in url:
+                 is_valid_structure = False
+            if url.startswith('.'): # Caso especifico del usuario (.xyz)
+                 is_valid_structure = False
+
         if not is_valid_structure:
-            # Saltamos VT, MD, GSB y vamos directo a Gemini para que explique el error
-            message = 'Entrada Inválida'
-            risk = 'UNKNOWN'
-            max_positives = 0
-            engines_list = [{
-                'name': 'Validador de Formato',
-                'detected': False,
-                'status_text': 'El texto ingresado no parece ser una URL válida (contiene espacios o falta dominio)',
-                'link': '#'
-            }]
-            
-            # Gemini explicara por que es invalido
-            logger.info("[GEMINI] Explicando input invalido...")
-            try:
-                gemini_result = gemini_service.explain_threat(0, 0, 'url', url)
-            except:
-                gemini_result = {'explicacion': 'El texto ingresado no es una URL válida.', 'recomendacion': 'Ingrese una URL con formato correcto (ej: google.com).'}
-                
-            final_response = {
-                'risk_level': risk,
-                'message': message,
-                'detail': "Análisis detenido por formato incorrecto.",
-                'engines': engines_list,
-                'gemini_explicacion': gemini_result.get('explicacion', ''),
-                'gemini_recomendacion': gemini_result.get('recomendacion', ''),
+            # Respuesta inmedita para input invalido
+            logger.warning(f"[VALIDATOR] Input rechazado: {url}")
+            return Response({
+                'risk_level': 'UNKNOWN',
+                'message': 'Entrada no válida',
+                'detail': 'El texto ingresado no parece ser una URL válida. Por favor ingrese un dominio completo (ej: google.com).',
+                'engines': [],
+                'gemini_explicacion': 'No se pudo analizar porque el texto no tiene el formato de una URL (ej: sitio.com).',
+                'gemini_recomendacion': 'Verifique que la dirección esté escrita correctamente.',
                 'positives': 0
-            }
-            return Response(final_response)
+            })
 
         # 1. VirusTotal
         try:
