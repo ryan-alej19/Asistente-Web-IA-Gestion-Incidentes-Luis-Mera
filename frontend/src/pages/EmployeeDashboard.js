@@ -219,7 +219,7 @@ const EmployeeDashboard = () => {
                   Centro de Seguridad
                 </h1>
                 <p className="text-secondary text-sm font-medium">
-                  Tecnicontrol Automotriz Software Protegido
+                  Talleres Luis Mera - Software Protegido
                 </p>
               </div>
             </div>

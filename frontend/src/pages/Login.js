@@ -91,7 +91,7 @@ const Login = ({ setAuth, setRole }) => {
                         </motion.div>
                         <h1 className="text-3xl font-bold text-white mb-2 tracking-tight">Bienvenido</h1>
                         <p className="text-gray-400 text-sm">
-                            Sistema de Ciberseguridad <span className="text-primary font-bold">Tecnicontrol</span>
+                            Sistema de Ciberseguridad <span className="text-primary font-bold">Luis Mera</span>
                         </p>
                     </div>
 
@@ -177,7 +177,7 @@ const Login = ({ setAuth, setRole }) => {
                     {/* Footer */}
                     <div className="px-8 pb-8 text-center">
                         <p className="text-xs text-center text-gray-500 border-t border-border pt-6">
-                            Protegido por <span className="text-gray-400 font-medium">Tecnicontrol Security Ops</span> v2.5
+                            Protegido por <span className="text-gray-400 font-medium">Talleres Luis Mera Security</span> v1.0
                         </p>
                     </div>
                 </div>

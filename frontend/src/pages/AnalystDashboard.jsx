@@ -120,7 +120,7 @@ const AnalystDashboard = () => {
                         </div>
                         <div>
                             <h1 className="text-white font-bold text-xl leading-none tracking-tight">Centro<span className="text-primary">SOC</span></h1>
-                            <p className="text-gray-500 text-xs font-medium tracking-widest uppercase mt-1">Tecnicontrol</p>
+                            <p className="text-gray-500 text-xs font-medium tracking-widest uppercase mt-1">Talleres Luis Mera</p>
                         </div>
                     </div>
                 </div>

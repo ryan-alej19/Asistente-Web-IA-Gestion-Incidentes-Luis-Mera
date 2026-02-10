@@ -3,7 +3,7 @@ version: '3.8'
 services:
   backend:
     build: ./backend
-    container_name: tesis-backend
+    container_name: luis-mera-backend
     ports:
       - "8000:8000"
     env_file:
@@ -15,7 +15,7 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: tesis-frontend
+    container_name: luis-mera-frontend
     ports:
       - "3000:3000"
     environment:
