@@ -11,5 +11,6 @@ urlpatterns = [
     path('admin/', admin.site.urls),
     path('api/auth/token/', CustomAuthToken.as_view()),
     path('api/incidents/', include('incidents.urls')),
+    path('api/users/', include('users.urls')),
     path('', root_view),
 ]

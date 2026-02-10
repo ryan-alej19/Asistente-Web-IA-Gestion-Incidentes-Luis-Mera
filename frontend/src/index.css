@@ -31,9 +31,10 @@ body {
     sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: var(--bg-app);
-  color: #1e293b;
-  /* Slate 800 */
+  background-color: #0F1117;
+  /* bg-background */
+  color: #e2e8f0;
+  /* slater-200 */
 }
 
 /* Custom Scrollbar for Sidebar */

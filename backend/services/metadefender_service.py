@@ -141,6 +141,7 @@ class MetaDefenderService:
              return {'error': str(e)}
 
     def analyze_url(self, url):
+        import urllib.parse
         # Analiza una URL
         if not self.api_key:
              return {'error': 'Falta la clave de API'}
@@ -148,9 +149,63 @@ class MetaDefenderService:
         try:
             logger.info(f"[MD] Analizando URL: {url}")
             
-            # 1. Enviar URL para escanear
-            submit_url = f"{self.base_url}/url"
+            # 1. Intentar buscar analisis previo (Lookup GET)
+            # Encode URL including slashes
+            # Encode URL including slashes
+            encoded_url = urllib.parse.quote(url, safe='')
+            lookup_url = f"{self.base_url}/url/{encoded_url}"
             headers = {'apikey': self.api_key}
+            
+            logger.info(f"[MD] Lookup URL: {lookup_url} with Key: {self.api_key[:5]}...")
+            
+            try:
+                # Timeout corto para lookup
+                response = requests.get(lookup_url, headers=headers, timeout=10)
+                logger.info(f"[MD] Lookup Status: {response.status_code}")
+                
+                if response.status_code == 200:
+                    res_data = response.json()
+                    # logger.info(f"[MD] Lookup Payload: {str(res_data)[:200]}") # Commented out to avoid noise
+                    
+                    scan_results = {}
+                    
+                    if 'scan_results' in res_data:
+                         scan_results = res_data.get('scan_results', {})
+                         total_detected = scan_results.get('total_detected_avs', 0)
+                         total_avs = scan_results.get('total_avs', 0)
+                    elif 'lookup_results' in res_data:
+                         # Formato alternativo de lookup
+                         lookup = res_data.get('lookup_results', {})
+                         total_detected = lookup.get('detected_by', 0)
+                         sources = lookup.get('sources', [])
+                         total_avs = len(sources)
+                    else:
+                         # Si devuelve formato corto o diferente, intentamos adaptar
+                         scan_results = res_data
+                         total_detected = scan_results.get('total_detected_avs', 0)
+                         total_avs = scan_results.get('total_avs', 0)
+                    
+                    # Si tiene datos validos, retornamos
+                    # Aceptamos total_avs > 0 o si lookup_results existe (aunque sea 0 detected)
+                    if total_avs > 0 or 'lookup_results' in res_data:
+                        logger.info(f"[MD] Lookup exitoso: {total_detected}/{total_avs}")
+                        return {
+                            'positives': total_detected,
+                            'total': total_avs,
+                            'source': 'MetaDefender',
+                            'link': f"https://metadefender.opswat.com/results/url/{urllib.parse.quote(url, safe='')}/overview" 
+                        }
+            except Exception as e:
+                logger.warning(f"[MD] Error en lookup: {e}")
+
+            # 2. Si no existe o falla lookup, intentar Enviar (SCAN)
+            # Nota: Endpoint POST /url suele ser estricto o fallar. 
+            # Si falla, retornamos error pero sin crashear.
+            
+            submit_url = f"{self.base_url}/url"
+            # headers ya tiene apikey
+            # Forzamos content-type correcto
+            headers['Content-Type'] = 'application/json'
             payload = {'url': url}
             
             response = requests.post(submit_url, json=payload, headers=headers, timeout=30)
@@ -159,8 +214,8 @@ class MetaDefenderService:
                 data = response.json()
                 data_id = data.get('data_id')
                 
-                # 2. Esperar resultados
-                for attempt in range(10):
+                # 3. Esperar resultados (Aumentamos a 20 intentos x 3s = 60s)
+                for attempt in range(20):
                     time.sleep(3)
                     result_url = f"{self.base_url}/url/{data_id}"
                     result_response = requests.get(result_url, headers=headers)
@@ -169,10 +224,15 @@ class MetaDefenderService:
                         res_data = result_response.json()
                         scan_results = res_data.get('scan_results', {})
                         
-                        if scan_results.get('progress_percentage') == 100:
+                        # Si ya tiene resultados (aunque sea parcial) o progreso 100
+                        if scan_results.get('progress_percentage') == 100 or 'total_detected_avs' in scan_results:
                             total_detected = scan_results.get('total_detected_avs', 0)
                             total_avs = scan_results.get('total_avs', 0)
                             
+                            # Si total_avs es 0, es que aun esta encolado posiblemente, seguimos esperando un poco mas
+                            if total_avs == 0 and attempt < 15:
+                                continue
+
                             return {
                                 'positives': total_detected,
                                 'total': total_avs,
@@ -180,8 +240,8 @@ class MetaDefenderService:
                                 'link': f"https://metadefender.opswat.com/results/url/{data_id}/overview"
                             }
             
-            logger.warning(f"[MD] No se pudo analizar URL. Status: {response.status_code}")
-            return {'error': 'No se pudo iniciar analisis'}
+            logger.warning(f"[MD] Timeout o error en analisis URL. Status: {response.status_code}. Msg: {response.text[:100]}")
+            return {'error': 'Timeout o error'}
 
         except Exception as e:
              logger.error(f"[MD] Error URL: {e}")

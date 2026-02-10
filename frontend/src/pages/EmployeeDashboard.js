@@ -1,5 +1,12 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Shield, Link, FileText, Upload, X, CheckCircle,
+  AlertTriangle, AlertOctagon, Info, ArrowRight, Loader2, LogOut
+} from 'lucide-react';
+import { GeminiLogo, VirusTotalLogo, MetaDefenderLogo } from '../components/BrandLogos';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 const EmployeeDashboard = () => {
   const [analysisType, setAnalysisType] = useState('url'); // url | file
@@ -13,6 +20,9 @@ const EmployeeDashboard = () => {
   const [analysisResult, setAnalysisResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  // Typewriter effect state
+  const [typwriterText, setTypewriterText] = useState('');
+
   // Funcion para cerrar sesion
   const handleLogout = () => {
     localStorage.clear();
@@ -25,11 +35,6 @@ const EmployeeDashboard = () => {
       const file = e.target.files[0];
       setAttachedFile(file);
       setAnalysisResult(null);
-
-      // Si es un archivo ZIP, mostramos advertencia en consola
-      if (file.name.toLowerCase().endsWith('.zip')) {
-        console.warn("Archivo ZIP detectado.");
-      }
     }
   };
 
@@ -41,19 +46,9 @@ const EmployeeDashboard = () => {
     // Si la URL parece valida, analizamos despues de un segundo
     if (newUrl && newUrl.includes('.')) {
       if (urlTimeout) clearTimeout(urlTimeout);
-
       const timeout = setTimeout(() => {
-        // Llamada directa a analizar (debemos asegurar que use la nueva URL)
-        // Como handleAnalyze usa el estado 'url', y setUrl es async, 
-        // pasamos la url explícitamente o dependemos del re-render.
-        // Para evitar problemas de closure, mejor usamos una función dedicada o useEffect,
-        // pero aquí simularemos el click en "Analizar".
-        // Mejor opción: llamar a una versión modificada de analizar recibiendo argumento
-        // O simplemente confiar en que el usuario dejará de escribir.
-        // Vamos a llamar a analyzeUrlDirect(newUrl)
         analyzeUrlDirect(newUrl);
       }, 1000);
-
       setUrlTimeout(timeout);
     }
   };
@@ -69,7 +64,6 @@ const EmployeeDashboard = () => {
       setAnalysisResult(res.data);
     } catch (err) {
       console.error(err);
-      // No alertar en auto-análisis para no molestar
     } finally {
       setAnalyzing(false);
     }
@@ -81,11 +75,11 @@ const EmployeeDashboard = () => {
 
     setAnalyzing(true);
     setAnalysisResult(null);
+    setTypewriterText('');
 
     try {
       const token = localStorage.getItem('token');
       const config = { headers: { Authorization: `Token ${token}` } };
-
       let res;
       if (analysisType === 'url') {
         res = await axios.post('http://localhost:8000/api/incidents/analyze-url-preview/', { url }, config);
@@ -103,6 +97,27 @@ const EmployeeDashboard = () => {
     }
   };
 
+  // Typewriter Effect for Gemini Explanation
+  useEffect(() => {
+    if (analysisResult?.gemini_result?.explicacion || analysisResult?.gemini_explicacion) {
+      const text = analysisResult.gemini_explicacion || analysisResult.gemini_result.explicacion;
+      if (!text) return;
+      let i = 0;
+      const speed = 15; // ms per char
+
+      const type = () => {
+        if (i < text.length) {
+          setTypewriterText((prev) => text.substring(0, i + 1));
+          i++;
+          setTimeout(type, speed);
+        }
+      };
+
+      setTypewriterText('');
+      type();
+    }
+  }, [analysisResult]);
+
   const handleSubmitIncident = async () => {
     setSubmitting(true);
     try {
@@ -113,6 +128,20 @@ const EmployeeDashboard = () => {
       if (analysisType === 'url') formData.append('url', url);
       if (analysisType === 'file') formData.append('file', attachedFile);
 
+      // Enviar el resultado del análisis (snapshot)
+      if (analysisResult) {
+        const snapshot = {
+          engines: analysisResult.engines,
+          risk_level: analysisResult.risk_level,
+          gemini_explicacion: analysisResult.gemini_explicacion || (analysisResult.gemini_result?.explicacion),
+          gemini_recomendacion: analysisResult.gemini_recomendacion || (analysisResult.gemini_result?.recomendacion),
+          heuristic: analysisResult.heuristic,
+          positives: analysisResult.positives || analysisResult.total_positives,
+          total: analysisResult.total || analysisResult.total_engines
+        };
+        formData.append('analysis_result', JSON.stringify(snapshot));
+      }
+
       await axios.post('http://localhost:8000/api/incidents/create/', formData, {
         headers: {
           Authorization: `Token ${token}`,
@@ -120,7 +149,7 @@ const EmployeeDashboard = () => {
         }
       });
 
-      alert('Incidente reportado exitosamente. El equipo de seguridad lo revisará.');
+      alert('Incidente reportado exitosamente. El equipo administrador lo revisará.');
       setAnalysisResult(null);
       setUrl('');
       setAttachedFile(null);
@@ -133,571 +162,380 @@ const EmployeeDashboard = () => {
     }
   };
 
-  return (
-    <div className="min-h-screen bg-slate-900 flex font-sans">
-      {/* FORMULARIO - IZQUIERDA (60%) */}
-      <div className="w-3/5 p-8 overflow-y-auto">
-        <div className="max-w-2xl mx-auto">
-          {/* Header */}
-          <div className="mb-8 flex justify-between items-start">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2">
-                Panel de Seguridad
-              </h1>
-              <p className="text-slate-400 text-lg">
-                Reporte de correos y archivos sospechosos
-              </p>
-            </div>
-            <button onClick={handleLogout} className="text-slate-400 hover:text-white transition-colors flex items-center gap-2">
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-              </svg>
-              Salir
-            </button>
-          </div>
+  // Variants for Framer Motion
+  const containerVariants = {
+    hidden: { opacity: 0, y: 20 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+  };
 
-          {/* Tabs */}
-          <div className="flex gap-4 mb-6">
+  const cardVariants = {
+    hidden: { opacity: 0, scale: 0.95 },
+    visible: { opacity: 1, scale: 1, transition: { duration: 0.3 } }
+  };
+
+  // Helper calculation for Chart
+  const getChartData = () => {
+    if (!analysisResult) return [];
+    const positives = analysisResult.positives || analysisResult.total_positives || 0;
+    const total = analysisResult.total || analysisResult.total_engines || 1; // avoid div 0
+    const clean = Math.max(0, total - positives);
+
+    return [
+      { name: 'Malicioso', value: positives, color: '#ef4444' }, // Red-500
+      { name: 'Seguro', value: clean, color: '#22c55e' } // Green-500
+    ];
+  };
+
+  const chartData = getChartData();
+  const positivesCount = analysisResult ? (analysisResult.positives || analysisResult.total_positives || 0) : 0;
+  const totalCount = analysisResult ? (analysisResult.total || analysisResult.total_engines || 0) : 0;
+
+  return (
+    <div className="min-h-screen bg-background text-gray-200 font-sans flex overflow-hidden">
+
+      {/* LEFT PANEL - INPUT FORM */}
+      <motion.div
+        initial={{ opacity: 0, x: -20 }}
+        animate={{ opacity: 1, x: 0 }}
+        className="w-3/5 p-8 overflow-y-auto border-r border-border"
+      >
+        <div className="max-w-3xl mx-auto pt-6">
+
+          <header className="mb-10 flex justify-between items-center">
+            <div className="flex items-center gap-4">
+              <div className="relative group perspective-1000">
+                <div className="absolute inset-0 bg-primary/20 rounded-xl blur-lg group-hover:bg-primary/40 transition-all duration-300" />
+                <div className="relative bg-white p-2 rounded-xl shadow-lg border-2 border-white/50 transform transition-transform duration-300 hover:scale-105 hover:rotate-2">
+                  <img
+                    src="/assets/logo_tecnicontrol.jpg"
+                    alt="Tecnicontrol Logo"
+                    className="h-14 w-auto object-contain rounded-lg filter drop-shadow-sm"
+                  />
+                </div>
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold text-white flex items-center gap-3 tracking-tight">
+                  Centro de Seguridad
+                </h1>
+                <p className="text-secondary text-sm font-medium">
+                  Tecnicontrol Automotriz Software Protegido
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-2 text-secondary hover:text-white transition-colors px-4 py-2 hover:bg-surface rounded-lg"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="font-medium">Salir</span>
+            </button>
+          </header>
+
+          {/* Type Selector */}
+          <div className="grid grid-cols-2 gap-4 mb-8 bg-surface p-1 rounded-xl">
             <button
               onClick={() => { setAnalysisType('url'); setAnalysisResult(null); }}
-              className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${analysisType === 'url'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
-                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              className={`flex items-center justify-center gap-3 py-4 rounded-lg font-medium transition-all ${analysisType === 'url'
+                ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-              </svg>
-              Enlace Sospechoso
+              <Link className="w-5 h-5" />
+              <span>Analizar Enlace</span>
             </button>
             <button
               onClick={() => { setAnalysisType('file'); setAnalysisResult(null); }}
-              className={`flex-1 py-3 px-6 rounded-lg font-semibold transition-all flex items-center justify-center gap-2 ${analysisType === 'file'
-                ? 'bg-blue-600 text-white shadow-lg shadow-blue-900/50'
-                : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
+              className={`flex items-center justify-center gap-3 py-4 rounded-lg font-medium transition-all ${analysisType === 'file'
+                ? 'bg-primary text-white shadow-lg shadow-primary/20'
+                : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
             >
-              <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
-              </svg>
-              Archivo Adjunto
+              <FileText className="w-5 h-5" />
+              <span>Analizar Archivo</span>
             </button>
           </div>
 
-          {/* Formulario dinámico */}
-          {analysisType === 'url' ? (
-            <div className="mb-6">
-              <label className="block text-white font-semibold mb-3 text-lg">
-                Pegue el enlace sospechoso:
-              </label>
-              <div className="relative">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <span className="text-slate-500">https://</span>
-                </div>
+          {/* Input Area */}
+          <motion.div
+            key={analysisType}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.2 }}
+            className="mb-8"
+          >
+            {analysisType === 'url' ? (
+              <div className="relative group">
                 <input
                   type="text"
                   value={url}
                   onChange={handleUrlChange}
-                  placeholder="ejemplo-sospechoso.com"
-                  className="w-full pl-20 px-4 py-4 rounded-lg text-lg bg-slate-800 text-white border-2 border-slate-700 focus:border-blue-500 focus:outline-none transition-colors"
+                  placeholder="Buscar o Escanear URL"
+                  className="w-full bg-surface border border-border text-white rounded-xl py-4 px-4 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-lg font-mono"
                 />
               </div>
-              <button
-                onClick={handleAnalyze}
-                disabled={!url || analyzing}
-                className="mt-4 w-full bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 disabled:cursor-not-allowed disabled:text-slate-500 text-white font-bold py-4 rounded-lg text-lg transition-all flex items-center justify-center gap-2"
-              >
-                {analyzing ? (
-                  <>
-                    <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                    </svg>
-                    Analizando...
-                  </>
-                ) : 'Analizar Riesgo Ahora'}
-              </button>
-            </div>
-          ) : (
-            <div className="mb-6">
-              <label className="block text-white font-semibold mb-3 text-lg">
-                Suba el archivo sospechoso:
-              </label>
-              {!attachedFile ? (
-                <label className="flex flex-col items-center justify-center w-full h-48 border-3 border-dashed border-slate-600 rounded-xl cursor-pointer bg-slate-800 hover:bg-slate-750 hover:border-blue-500 transition-all group">
-                  <svg className="w-16 h-16 text-slate-500 group-hover:text-blue-500 transition-colors mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-                  </svg>
-                  <p className="text-slate-400 font-medium text-lg group-hover:text-white transition-colors">Click para seleccionar archivo</p>
-                  <p className="text-slate-500 text-sm mt-2">PDF, EXE, ZIP, DOC, etc.</p>
-                  <input type="file" className="hidden" onChange={handleFileChange} />
-                </label>
-              ) : (
-                <div className="bg-slate-800 border-2 border-slate-700 p-6 rounded-xl animate-fade-in">
-                  <div className="flex items-center justify-between">
+            ) : (
+              <div className="relative">
+                {!attachedFile ? (
+                  <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-border rounded-xl cursor-pointer bg-surface/50 hover:bg-surface hover:border-primary/50 transition-all group">
+                    <Upload className="w-12 h-12 text-gray-500 group-hover:text-primary mb-4 transition-colors" />
+                    <p className="text-gray-300 font-medium text-lg">Haga clic o arrastre un archivo aquí</p>
+                    <p className="text-gray-500 text-sm mt-2">Soporta PDF, DOCX, EXE, ZIP...</p>
+                    <input type="file" className="hidden" onChange={handleFileChange} />
+                  </label>
+                ) : (
+                  <div className="bg-surface border border-border rounded-xl p-6 flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                      <div className="w-14 h-14 bg-blue-600 rounded-lg flex items-center justify-center">
-                        <svg className="w-7 h-7 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
+                      <div className="w-12 h-12 bg-primary/10 rounded-lg flex items-center justify-center text-primary">
+                        <FileText className="w-6 h-6" />
                       </div>
                       <div>
-                        <p className="font-semibold text-white text-lg">{attachedFile.name}</p>
-                        <p className="text-slate-400">{(attachedFile.size / 1024).toFixed(2)} KB</p>
+                        <p className="font-medium text-white">{attachedFile.name}</p>
+                        <p className="text-sm text-gray-400">{(attachedFile.size / 1024).toFixed(2)} KB</p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-3">
                       <button
-                        onClick={handleAnalyze}
-                        disabled={analyzing}
-                        className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors"
+                        onClick={() => { setAttachedFile(null); setAnalysisResult(null); }}
+                        className="p-2 hover:bg-white/10 rounded-lg text-gray-400 hover:text-danger transition-colors"
                       >
-                        {analyzing ? '...' : 'Analizar'}
-                      </button>
-                      <button
-                        onClick={() => {
-                          setAttachedFile(null);
-                          setAnalysisResult(null);
-                        }}
-                        className="px-4 py-2 bg-slate-700 hover:bg-red-600 text-white font-semibold rounded-lg transition-colors"
-                      >
-                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                        </svg>
+                        <X className="w-5 h-5" />
                       </button>
                     </div>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            )}
+          </motion.div>
 
-              {/* Alerta Zero Trust - Archivos Encriptados */}
-              {attachedFile && /\.(zip|rar|7z)$/i.test(attachedFile.name) && (
-                <div className="mt-4 p-4 bg-orange-900/40 border border-orange-500 rounded-lg flex items-start gap-3 animate-fade-in shadow-lg shadow-orange-900/20">
-                  <svg className="w-8 h-8 text-orange-400 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div>
-                    <p className="text-orange-200 font-black text-lg tracking-wide uppercase">⚠️ ANÁLISIS RESTRINGIDO: Archivo Encriptado</p>
-                    <p className="text-orange-100 text-sm mt-2 leading-relaxed font-medium">
-                      El contenido de este archivo está oculto por una contraseña. Al no poder verificarse su seguridad, el protocolo recomienda <strong>NO ABRIRLO</strong> a menos que conozca al remitente y tenga la contraseña oficial.
-                      <br />
-                      <span className="block mt-2 text-orange-300 italic">Riesgo de contenido malicioso oculto.</span>
-                    </p>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Descripción */}
-          <div className="mb-6">
-            <label className="block text-white font-semibold mb-3 text-lg">
-              Descripción (Opcional):
-            </label>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              placeholder="Cuéntanos qué pasó o por qué sospechas..."
-              rows={4}
-              className="w-full px-4 py-3 rounded-lg bg-slate-800 text-white border-2 border-slate-700 focus:border-blue-500 focus:outline-none resize-none transition-colors"
-            />
-          </div>
-
-          {/* Botón enviar */}
-          {analysisResult && (
+          {/* Action Button */}
+          <div className="flex justify-end">
             <button
-              onClick={handleSubmitIncident}
-              disabled={submitting}
-              className="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-4 rounded-lg text-lg transition-colors shadow-lg shadow-green-900/30 flex items-center justify-center gap-2"
+              onClick={handleAnalyze}
+              disabled={(!url && !attachedFile) || analyzing}
+              className="bg-primary hover:bg-blue-600 disabled:opacity-50 disabled:cursor-not-allowed text-white px-8 py-3 rounded-xl font-medium text-lg shadow-lg shadow-primary/25 transition-all flex items-center gap-2"
             >
-              {submitting ? 'Enviando...' : (
+              {analyzing ? (
                 <>
-                  <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  Crear Reporte de Seguridad
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Analizando...
+                </>
+              ) : (
+                <>
+                  Analizar Riesgo <ArrowRight className="w-5 h-5" />
                 </>
               )}
             </button>
-          )}
-        </div>
-      </div >
+          </div>
 
-      {/* PANEL ANÁLISIS - DERECHA (40%) */}
-      < div className="w-2/5 bg-slate-950 border-l border-slate-800 p-8 flex flex-col h-screen sticky top-0" >
-        <div className="mb-6">
-          <div className="flex items-center gap-3 mb-2">
-            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center shadow-lg shadow-blue-900/50">
-              <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
-              </svg>
+          <hr className="border-border my-10" />
+
+          {/* Optional Description */}
+          <div className="mb-8">
+            <label className="block text-gray-400 font-medium mb-2">Notas adicionales (Opcional):</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Contexto sobre el incidente..."
+              rows={3}
+              className="w-full bg-surface border border-border text-white rounded-lg p-4 focus:ring-1 focus:ring-primary outline-none resize-none"
+            />
+          </div>
+
+          {/* Submit Report Button */}
+          <AnimatePresence>
+            {analysisResult && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0 }}
+              >
+                <button
+                  onClick={handleSubmitIncident}
+                  disabled={submitting}
+                  className="w-full bg-success text-white font-bold py-4 rounded-xl shadow-lg shadow-success/20 hover:bg-green-600 transition-all flex items-center justify-center gap-2"
+                >
+                  {submitting ? <Loader2 className="animate-spin" /> : <Shield className="w-5 h-5" />}
+                  {submitting ? 'Enviando...' : 'Confirmar y Reportar al SOC'}
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+      </motion.div>
+
+      {/* RIGHT PANEL - RESULTS */}
+      <div className="w-2/5 bg-surface border-l border-border relative overflow-y-auto custom-scrollbar">
+        <div className="p-8 min-h-full flex flex-col">
+
+          <div className="mb-8 flex items-center gap-3">
+            <div className="w-10 h-10 bg-background rounded-full flex items-center justify-center border border-border">
+              <GeminiLogo className="w-6 h-6" />
             </div>
             <div>
-              <h2 className="text-2xl font-bold text-white">
-                Resultado del Análisis
-              </h2>
-              <p className="text-slate-400 text-sm">
-                Motor de Inteligencia Artificial
-              </p>
+              <h2 className="text-white font-bold text-lg">Motor de Análisis</h2>
+              <p className="text-xs text-gray-400">Powered by Google Gemini 2.5 Flash • VirusTotal • MetaDefender • Google Safe Browsing</p>
             </div>
           </div>
-        </div>
 
-        <div className="flex-1 flex items-center justify-center">
-          {/* Loading */}
-          {analyzing && (
-            <div className="text-center">
-              <div className="animate-spin w-20 h-20 border-4 border-blue-500 border-t-transparent rounded-full mx-auto mb-6"></div>
-              <p className="text-xl font-semibold text-white mb-2">
-                Analizando Amenazas...
-              </p>
-              <p className="text-slate-400">
-                Consultando VirusTotal y bases de datos <br /> de seguridad global...
-              </p>
-            </div>
-          )}
-
-          {/* Resultado CRÍTICO */}
-          {analysisResult && (analysisResult.risk_level === 'CRITICAL' || analysisResult.risk_level === 'HIGH' || analysisResult.risk_level === 'MEDIUM') && !analyzing && (
-            <div className="w-full">
-              <div className="bg-gradient-to-br from-red-900 to-red-950 p-8 rounded-2xl border-4 border-red-500 shadow-2xl shadow-red-900/50">
-                <div className="text-center mb-6">
-                  {/* Icono de alerta */}
-                  <svg className="w-24 h-24 text-red-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-
-                  <h3 className="text-4xl font-black text-white mb-3 tracking-wide">
-                    {analysisResult.risk_level === 'CRITICAL' ? 'PELIGRO' : 'ADVERTENCIA'}
-                  </h3>
-                  <p className="text-2xl text-red-200 mb-6 font-medium">
-                    {analysisResult.message}
-                  </p>
-                </div>
-
-                {/* RESULTADOS MOTORES */}
-                <div className="bg-red-950 bg-opacity-80 p-6 rounded-xl mb-6 border border-red-800">
-                  <p className="text-xl font-bold text-white mb-4 text-center">
-                    Análisis Multi-Motor:
-                  </p>
-
-                  <div className="space-y-4">
-                    {analysisResult.engines && analysisResult.engines.map((engine, idx) => (
-                      <div key={idx} className="flex items-center justify-between bg-black/20 p-3 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          {engine.detected ? (
-                            <svg className="w-6 h-6 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                          ) : (
-                            <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                          )}
-                          <div>
-                            <p className="font-bold text-white">{engine.name}</p>
-                            {engine.total ? (
-                              <p className="text-sm text-slate-300">
-                                {engine.positives}/{engine.total} detecciones ({((engine.positives / engine.total) * 100).toFixed(1)}%)
-                              </p>
-                            ) : (
-                              <p className="text-sm text-slate-300">
-                                {engine.status_text || (engine.detected ? 'Amenaza Detectada' : 'Limpio')}
-                              </p>
-                            )}
-                          </div>
-                        </div>
-
-                        {engine.link && engine.link !== '#' && (
-                          <a href={engine.link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
-                            Reporte Oficial
-                            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                            </svg>
-                          </a>
-                        )}
-                      </div>
-                    ))}
+          <AnimatePresence mode="wait">
+            {/* Loading State */}
+            {analyzing && (
+              <motion.div
+                key="loading"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="flex-1 flex flex-col items-center justify-center text-center opacity-50"
+              >
+                <div className="relative w-24 h-24 mb-6">
+                  <motion.div
+                    animate={{ rotate: 360 }}
+                    transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
+                    className="absolute inset-0 rounded-full border-4 border-t-primary border-r-transparent border-b-transparent border-l-transparent"
+                  />
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <GeminiLogo className="w-10 h-10 opacity-80" />
                   </div>
                 </div>
+                <p className="text-white font-medium text-lg">Analizando Amenazas</p>
+                <p className="text-gray-500 text-sm mt-2">Consultando bases de datos globales...</p>
+              </motion.div>
+            )}
 
-                <div className="bg-red-950 bg-opacity-80 p-6 rounded-xl mb-6 border border-red-800">
-                  <p className="text-xl font-bold text-white mb-3 text-center flex items-center justify-center gap-2">
-                    <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M18.364 18.364A9 9 0 005.636 5.636m12.728 12.728A9 9 0 015.636 5.636m12.728 12.728L5.636 5.636" />
-                    </svg>
-                    NO ABRIR ESTE ARCHIVO
-                  </p>
-                </div>
+            {/* Results State */}
+            {!analyzing && analysisResult && (
+              <motion.div
+                key="result"
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+                className="space-y-6"
+              >
+                {/* Risk Card */}
+                <motion.div
+                  variants={cardVariants}
+                  className={`relative overflow-hidden rounded-2xl border p-1 text-center ${analysisResult.risk_level === 'CRITICAL' || analysisResult.risk_level === 'HIGH' ? 'bg-danger/10 border-danger text-danger' :
+                    analysisResult.risk_level === 'MEDIUM' || analysisResult.risk_level === 'CAUTION' ? 'bg-warning/10 border-warning text-warning' :
+                      'bg-success/10 border-success text-success'
+                    }`}
+                >
+                  <div className="flex flex-col items-center p-6">
+                    {/* CHART VISUALIZATION */}
+                    <div className="w-40 h-40 mb-4 relative">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <PieChart>
+                          <Pie
+                            data={chartData}
+                            innerRadius={60}
+                            outerRadius={75}
+                            paddingAngle={5}
+                            dataKey="value"
+                            stroke="none"
+                          >
+                            {chartData.map((entry, index) => (
+                              <Cell key={`cell-${index}`} fill={entry.color} />
+                            ))}
+                          </Pie>
+                          <Tooltip
+                            contentStyle={{ backgroundColor: '#1a1b26', borderColor: '#2f334d', color: '#fff' }}
+                            itemStyle={{ color: '#fff' }}
+                          />
+                        </PieChart>
+                      </ResponsiveContainer>
 
-                {/* ANÁLISIS INTEIGENTE DE AMENAZAS (GEMINI) */}
-                {(analysisResult.gemini_explicacion || (analysisResult.gemini_result && analysisResult.gemini_result.explicacion)) && (
-                  <div className="mb-6 bg-red-800 bg-opacity-40 p-6 rounded-xl border-2 border-red-600">
-                    <div className="flex items-start gap-3 mb-3">
-                      <svg className="w-6 h-6 text-red-300 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                      </svg>
-                      <div>
-                        <p className="text-white font-semibold mb-2">
-                          Análisis Inteligente de Amenazas
-                        </p>
-                        <p className="text-red-100 text-lg leading-relaxed">
-                          {analysisResult.gemini_explicacion || (analysisResult.gemini_result && analysisResult.gemini_result.explicacion)}
-                        </p>
+                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                        <span className={`text-2xl font-bold ${analysisResult.risk_level === 'CRITICAL' ? 'text-danger' :
+                          analysisResult.risk_level === 'LOW' ? 'text-success' : 'text-warning'
+                          }`}>
+                          {positivesCount}/{totalCount}
+                        </span>
+                        <span className="text-xs text-gray-500 uppercase tracking-widest mt-1">Detecciones</span>
                       </div>
                     </div>
 
-                    {(analysisResult.gemini_recomendacion || (analysisResult.gemini_result && analysisResult.gemini_result.recomendacion)) && (
-                      <div className="mt-4 pt-4 border-t border-red-700">
-                        <p className="text-red-200 font-semibold mb-2">
-                          Recomendación de Seguridad:
-                        </p>
-                        <p className="text-red-100 text-lg">
-                          {analysisResult.gemini_recomendacion || (analysisResult.gemini_result && analysisResult.gemini_result.recomendacion)}
-                        </p>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                <div className="bg-red-900 bg-opacity-40 p-6 rounded-xl border border-red-800/50">
-                  <p className="font-bold text-white mb-3 text-lg border-b border-red-700 pb-2">
-                    Acciones Recomendadas:
-                  </p>
-                  <div className="space-y-3 text-red-100">
-                    <div className="flex items-start gap-3">
-                      <div className="bg-red-500 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">1</div>
-                      <p>Crear reporte inmediatamente (Botón verde)</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="bg-red-500 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">2</div>
-                      <p>No ejecutar ni descargar el contenido.</p>
-                    </div>
-                    <div className="flex items-start gap-3">
-                      <div className="bg-red-500 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0 mt-0.5">3</div>
-                      <p>Esperar contacto del equipo de seguridad.</p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Resultado PRECAUCIÓN (Archivos Encriptados/Zip) */}
-          {analysisResult && analysisResult.risk_level === 'CAUTION' && !analyzing && (
-            <div className="w-full">
-              <div className="bg-gradient-to-br from-yellow-900 to-yellow-950 p-8 rounded-2xl border-4 border-yellow-500 shadow-2xl shadow-yellow-900/50">
-                <div className="text-center">
-                  <svg className="w-24 h-24 text-yellow-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-                  </svg>
-
-                  <h3 className="text-4xl font-black text-white mb-3 tracking-wide">
-                    PRECAUCIÓN
-                  </h3>
-                  <p className="text-xl text-yellow-200 mb-6 font-medium">
-                    Archivo Comprimido / Cifrado
-                  </p>
-
-                  <div className="bg-yellow-950 bg-opacity-80 p-6 rounded-xl border border-yellow-800 mb-6">
-                    <p className="text-lg text-yellow-100 mb-4">
-                      Este archivo no mostró amenazas directas, pero al ser un comprimido (.zip/rar), los antivirus podrían no ver su contenido real si está cifrado.
+                    <h2 className="text-3xl font-black tracking-tight mb-2">
+                      {analysisResult.risk_level === 'LOW' ? 'SEGURO' :
+                        analysisResult.risk_level === 'CRITICAL' ? 'PELIGROSO' :
+                          'PRECAUCIÓN'}
+                    </h2>
+                    <p className="font-medium opacity-90 text-lg">
+                      {analysisResult.message || "Análisis Completado"}
                     </p>
+                  </div>
+                </motion.div>
 
-                    <div className="space-y-3">
-                      {analysisResult.engines && analysisResult.engines.map((engine, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-black/20 p-3 rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <div>
-                              <p className="font-bold text-white">{engine.name}</p>
-                              <p className="text-sm text-slate-300">
-                                {engine.positives}/{engine.total} detecciones
-                              </p>
-                            </div>
-                          </div>
-                          {engine.link && engine.link !== '#' && (
-                            <a href={engine.link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
-                              Ver Reporte
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                            </a>
-                          )}
-                        </div>
-                      ))}
-                    </div>
+                {/* Gemini Analysis */}
+                <div className="bg-background rounded-xl p-6 border border-border">
+                  <div className="flex items-center gap-2 mb-4">
+                    <GeminiLogo className="w-5 h-5" />
+                    <h3 className="text-white font-bold">Análisis Inteligente</h3>
+                  </div>
+                  <p className="text-gray-300 leading-relaxed font-light">
+                    {typwriterText}
+                    <motion.span
+                      animate={{ opacity: [0, 1, 0] }}
+                      transition={{ repeat: Infinity, duration: 0.8 }}
+                      className="inline-block w-1.5 h-4 ml-1 bg-primary align-middle"
+                    />
+                  </p>
+                </div>
+
+                {/* Engines Detail */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between mb-2">
+                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Detalle por Motores</h3>
                   </div>
 
-                  {/* Explicación Gemini (CAUTION) */}
-                  {(analysisResult.gemini_explicacion || (analysisResult.gemini_result && analysisResult.gemini_result.explicacion)) && (
-                    <div className="mb-6 bg-yellow-800 bg-opacity-40 p-6 rounded-xl border-2 border-yellow-600">
-                      <div className="flex items-start gap-3 mb-3">
-                        <svg className="w-6 h-6 text-yellow-300 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
+                  {analysisResult.engines?.map((engine, idx) => (
+                    <motion.div
+                      key={idx}
+                      initial={{ opacity: 0, x: 20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: idx * 0.1 }}
+                      className="bg-background rounded-lg p-4 border border-border flex items-center justify-between group hover:border-primary/50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3">
+                        {engine.name === 'VirusTotal' ? <VirusTotalLogo className="w-8 h-8" /> :
+                          engine.name === 'MetaDefender' ? <MetaDefenderLogo className="w-8 h-8" /> :
+                            <Shield className="w-8 h-8 text-gray-600" />}
+
                         <div>
-                          <p className="text-white font-semibold mb-2">
-                            Análisis Inteligente de Amenazas
+                          <p className="text-white font-medium">{engine.name}</p>
+                          <p className={`text-xs font-bold ${engine.detected || (engine.positives > 0) ? 'text-danger' : 'text-success'
+                            }`}>
+                            {engine.detected || (engine.positives > 0) ? 'Amenaza Detectada' : 'Limpio'}
                           </p>
-                          <p className="text-yellow-100 text-lg leading-relaxed">
-                            {analysisResult.gemini_explicacion || (analysisResult.gemini_result && analysisResult.gemini_result.explicacion)}
-                          </p>
+                          {/* Show x/x for engines that support it */}
+                          {(engine.total > 0) && (
+                            <p className="text-xs text-gray-500 mt-0.5">
+                              {engine.positives}/{engine.total} motores
+                            </p>
+                          )}
                         </div>
                       </div>
 
-                      {(analysisResult.gemini_recomendacion || (analysisResult.gemini_result && analysisResult.gemini_result.recomendacion)) && (
-                        <div className="mt-4 pt-4 border-t border-yellow-700">
-                          <p className="text-yellow-200 font-semibold mb-2">
-                            Recomendación de Seguridad:
-                          </p>
-                          <p className="text-yellow-100 text-lg">
-                            {analysisResult.gemini_recomendacion || (analysisResult.gemini_result && analysisResult.gemini_result.recomendacion)}
-                          </p>
-                        </div>
+                      {engine.link && (
+                        <a
+                          href={engine.link}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-gray-500 hover:text-primary transition-colors"
+                        >
+                          <ArrowRight className="w-5 h-5" />
+                        </a>
                       )}
-                    </div>
-                  )}
+                    </motion.div>
+                  ))}
                 </div>
-              </div>
-            </div>
-          )}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
-
-          {/* Resultado SEGURO */}
-          {analysisResult && analysisResult.risk_level === 'LOW' && !analyzing && (
-            <div className="w-full">
-              <div className="bg-gradient-to-br from-green-900 to-green-950 p-8 rounded-2xl border-4 border-green-500 shadow-2xl shadow-green-900/50">
-                <div className="text-center">
-                  {/* Icono check */}
-                  <svg className="w-24 h-24 text-green-500 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-
-                  <h3 className="text-4xl font-black text-white mb-3">
-                    SEGURO
-                  </h3>
-                  <p className="text-xl text-green-200 mb-6 font-medium">
-                    {analysisResult.message}
-                  </p>
-
-                  <div className="bg-green-950 bg-opacity-80 p-6 rounded-xl border border-green-800">
-                    <p className="text-lg text-green-100 flex items-center justify-center gap-2 mb-4">
-                      <svg className="w-6 h-6 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      Analizado por {analysisResult.engines ? analysisResult.engines.length : 0} motores de seguridad.
-                    </p>
-
-                    <div className="space-y-3">
-                      {analysisResult.engines && analysisResult.engines.map((engine, idx) => (
-                        <div key={idx} className="flex items-center justify-between bg-black/20 p-3 rounded-lg">
-                          <div className="flex items-center gap-3">
-                            <svg className="w-6 h-6 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                            </svg>
-                            <div>
-                              <p className="font-bold text-white">{engine.name}</p>
-                              {engine.total ? (
-                                <p className="text-sm text-slate-300">
-                                  {engine.positives}/{engine.total} detecciones
-                                </p>
-                              ) : (
-                                <p className="text-sm text-slate-300">
-                                  {engine.status_text || 'Limpio'}
-                                </p>
-                              )}
-                            </div>
-                          </div>
-
-                          {engine.link && engine.link !== '#' && (
-                            <a href={engine.link} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-300 text-sm flex items-center gap-1">
-                              Ver Reporte
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                              </svg>
-                            </a>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-
-                  </div>
-
-                  {/* NUEVO: Explicación Gemini */}
-                  {analysisResult.gemini_explicacion && (
-                    <div className="mt-6 bg-green-800 bg-opacity-40 p-6 rounded-xl border-2 border-green-600">
-                      <div className="flex items-start gap-3">
-                        <svg className="w-6 h-6 text-green-300 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                        </svg>
-                        <div>
-                          <p className="text-green-100 text-lg leading-relaxed">
-                            {analysisResult.gemini_explicacion}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Resultado INVALIDO / UNKNOWN */}
-          {analysisResult && analysisResult.risk_level === 'UNKNOWN' && !analyzing && (
-            <div className="w-full">
-              <div className="bg-slate-800 p-8 rounded-2xl border-4 border-slate-600 shadow-2xl">
-                <div className="text-center">
-                  <svg className="w-24 h-24 text-slate-400 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <h3 className="text-4xl font-black text-white mb-3">INFO</h3>
-                  <p className="text-xl text-slate-300 mb-6">{analysisResult.message}</p>
-                </div>
-
-                {/* Explicación Gemini para Input Iválido */}
-                {(analysisResult.gemini_explicacion || (analysisResult.gemini_result && analysisResult.gemini_result.explicacion)) && (
-                  <div className="mt-6 bg-blue-900 bg-opacity-40 p-6 rounded-xl border-2 border-blue-500">
-                    <div className="flex items-start gap-3">
-                      <svg className="w-6 h-6 text-blue-300 flex-shrink-0 mt-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                      </svg>
-                      <div>
-                        <p className="text-white font-semibold mb-2">Análisis de Formato:</p>
-                        <p className="text-blue-100 text-lg leading-relaxed">
-                          {analysisResult.gemini_explicacion || (analysisResult.gemini_result && analysisResult.gemini_result.explicacion)}
-                        </p>
-                        {(analysisResult.gemini_recomendacion || (analysisResult.gemini_result && analysisResult.gemini_result.recomendacion)) && (
-                          <p className="text-blue-200 mt-2 italic">
-                            "{analysisResult.gemini_recomendacion || (analysisResult.gemini_result && analysisResult.gemini_result.recomendacion)}"
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Estado inicial */}
-          {!analyzing && !analysisResult && (
-            <div className="text-center py-16 opacity-50">
-              <svg className="w-32 h-32 text-slate-600 mx-auto mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-              </svg>
-              <p className="text-slate-400 text-xl font-light">
-                Pegue un enlace o suba un archivo<br />para iniciar el análisis de seguridad.
-              </p>
-            </div>
-          )}
         </div>
-      </div >
-    </div >
+      </div>
+
+    </div>
   );
 };
 

@@ -3,6 +3,7 @@ import { useState, useEffect } from 'react';
 import Login from './pages/Login';
 import EmployeeDashboard from './pages/EmployeeDashboard';
 import AnalystDashboard from './pages/AnalystDashboard';
+import AdminDashboard from './pages/AdminDashboard';
 import './App.css';
 
 function App() {
@@ -30,7 +31,7 @@ function App() {
         <Route path="/login" element={
           !isAuthenticated ?
             <Login setAuth={setIsAuthenticated} setRole={setUserRole} /> :
-            <Navigate to={userRole === 'analyst' || userRole === 'admin' ? "/analyst" : "/employee"} />
+            <Navigate to={userRole === 'admin' ? "/admin" : (userRole === 'analyst' ? "/analyst" : "/employee")} />
         } />
 
         <Route path="/employee" element={
@@ -40,15 +41,22 @@ function App() {
         } />
 
         <Route path="/analyst" element={
-          isAuthenticated && (userRole === 'analyst' || userRole === 'admin') ?
+          isAuthenticated && userRole === 'analyst' ?
             <AnalystDashboard /> :
+            <Navigate to="/login" />
+        } />
+
+        <Route path="/admin" element={
+          isAuthenticated && userRole === 'admin' ?
+            <AdminDashboard /> :
             <Navigate to="/login" />
         } />
 
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
-    </BrowserRouter>
+      <div style={{ position: 'fixed', bottom: 10, right: 10, fontSize: '10px', color: '#666' }}>v.DEBUG.1.0</div>
+    </BrowserRouter >
   );
 }
 

@@ -35,6 +35,7 @@ class Incident(models.Model):
     phishtank_result = models.JSONField(blank=True, null=True)
     metadefender_result = models.JSONField(blank=True, null=True)
     gemini_analysis = models.TextField(blank=True, default='')
+    analysis_result = models.JSONField(blank=True, null=True) # Full analysis snapshot
     
     # Datos de control
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
@@ -50,6 +51,21 @@ class Incident(models.Model):
     
     def __str__(self):
         return f"Incidente #{self.id} - {self.get_risk_level_display()}"
+
+class IncidentNote(models.Model):
+    # Notas internas para analistas
+    incident = models.ForeignKey(Incident, on_delete=models.CASCADE, related_name='notes')
+    author = models.ForeignKey(User, on_delete=models.CASCADE)
+    content = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+        verbose_name = 'Nota de Incidente'
+        verbose_name_plural = 'Notas de Incidentes'
+        
+    def __str__(self):
+        return f"Nota en #{self.incident.id} por {self.author.username}"
 
 import hashlib
 from django.utils import timezone

@@ -13,6 +13,9 @@ from services.gemini_service import GeminiService
 from incidents.heuristic_classifier import HeuristicClassifier
 import logging
 import zipfile
+from django.http import HttpResponse
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +232,10 @@ def analyze_url_preview(request):
         url = request.data.get('url')
         if not url:
             return Response({'error': 'No se proporciono URL'}, status=400)
+
+        # Normalize URL (Add https if missing scheme)
+        if not url.startswith(('http://', 'https://')):
+            url = f'https://{url}'
             
         import hashlib
         # Cache Key (24 Horas)
@@ -403,7 +410,8 @@ def analyze_url_preview(request):
             'engines': engines_list,
             'gemini_explicacion': gemini_result.get('explicacion', ''),
             'gemini_recomendacion': gemini_result.get('recomendacion', ''),
-            'positives': max_positives
+            'positives': max_positives,
+            'total': total_scanned
         }
         
         # Guardar en Cache (24h = 86400s)
@@ -421,38 +429,75 @@ def create_incident(request):
     try:
         incident_type = request.data.get('incident_type')
         
+        # Recuperar datos de analisis previos si vienen en el request
+        # El frontend podria enviarlos o podriamos re-calcularlos.
+        # Para eficiencia en esta tesis, si el frontend ya tiene el resultado (preview),
+        # lo ideal seria enviarlo.
+        
+        analysis_result_data = request.data.get('analysis_result')
+        
+        # LOGGING DEBUG
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.info(f"Creating Incident. Analysis Result Present: {bool(analysis_result_data)}")
+        if analysis_result_data:
+             logger.info(f"Analysis Payload (first 100 chars): {str(analysis_result_data)[:100]}")
+
+        # Handle stringified JSON if it comes as a string (multipart/form-data often sends strings)
+        if isinstance(analysis_result_data, str):
+            import json
+            try:
+                analysis_result_data = json.loads(analysis_result_data)
+            except Exception as e:
+                logger.error(f"Error parsing analysis_result JSON: {e}")
+                analysis_result_data = {}
+
         incident = Incident.objects.create(
             incident_type=incident_type,
             url=request.data.get('url'),
+            attached_file=request.FILES.get('file'), # Ensure file is handled if sent
             description=request.data.get('description', ''),
             reported_by=request.user,
-            status='pending'
+            status='pending',
+            # Guardamos el snapshot directamente si existe
+            analysis_result=analysis_result_data if analysis_result_data else None,
+            risk_level=analysis_result_data.get('risk_level', 'UNKNOWN') if analysis_result_data else 'LOW'
         )
         
-        # Re-ejecutamos analisis? O confiamos en que el usuario ya vio el preview?
-        # Lo ideal es re-ejecutar para guardar la evidencia REAL en bdd
-        # O recibir los datos del frontend (inseguro).
-        # Vamos a re-ejecutar simplificado o llamar a la logica de preview.
-        # Por tiempo y consistencia, llamamos a lo mismo logicamente.
-        
-        # ... (Logica simplificada para guardar en modelo)
-        # Como es una demo/tesis, podemos asumir que si viene del preview, esta en cache.
-        # Recuperamos de cache
-        
-        target = request.data.get('url') if incident_type == 'url' else None
-        # Para archivo es mas complejo recuperar el hash sin leer de nuevo
-        
-        # Vamos a dejar que guarde un resultado dummy o basico por ahora para no complicar el create
-        # ya que el usuario dijo "Mejorar UI para mostrar multiples motores" en el Dashboard (Preview)
-        # El create_incident es backend puro.
-        
-        # Simple implementation: Save basic info
-        incident.risk_level = 'LOW' # Default
+        # Tambien poblamos los campos legacy por compatibilidad si es posible
+        if analysis_result_data:
+             # Intentar poblar campos legacy (opcional, pero util para depuracion y fallback)
+             try:
+                 # Extract engines to map to legacy fields
+                 engines = analysis_result_data.get('engines', [])
+                 
+                 # 1. VirusTotal
+                 vt_data = next((e for e in engines if e['name'] == 'VirusTotal'), None)
+                 if vt_data:
+                     incident.virustotal_result = vt_data
+                 
+                 # 2. MetaDefender
+                 md_data = next((e for e in engines if e['name'] == 'MetaDefender'), None)
+                 if md_data:
+                     incident.metadefender_result = md_data
+                     
+                 # 3. Gemini
+                 gemini_expl = analysis_result_data.get('gemini_explicacion')
+                 gemini_rec = analysis_result_data.get('gemini_recomendacion')
+                 if gemini_expl:
+                     incident.gemini_analysis = gemini_expl
+                     if gemini_rec:
+                         incident.gemini_analysis += f"\n\nRecomendación: {gemini_rec}"
+                         
+             except Exception as e:
+                 logger.error(f"Error populating legacy fields: {e}")
+
         incident.save()
         
         return Response(IncidentSerializer(incident).data, status=201)
 
     except Exception as e:
+        print(f"Error creating incident: {e}") # Debug
         return Response({'error': str(e)}, status=500)
 
 
@@ -473,6 +518,10 @@ def list_incidents(request):
             incidents = Incident.objects.filter(reported_by=request.user)
             
         # Filtros
+        incident_type = request.query_params.get('incident_type')
+        if incident_type and incident_type != 'all':
+            incidents = incidents.filter(incident_type=incident_type)
+
         risk_level = request.query_params.get('risk_level')
         if risk_level:
             incidents = incidents.filter(risk_level=risk_level)
@@ -481,6 +530,17 @@ def list_incidents(request):
         if status_param:
             incidents = incidents.filter(status=status_param)
             
+        # Búsqueda de texto (Search)
+        search_query = request.query_params.get('search')
+        if search_query:
+            from django.db.models import Q
+            incidents = incidents.filter(
+                Q(description__icontains=search_query) |
+                Q(url__icontains=search_query) |
+                Q(analyst_notes__icontains=search_query) |
+                Q(id__icontains=search_query)
+            )
+
         date_from = request.query_params.get('date_from')
         date_to = request.query_params.get('date_to')
         if date_from and date_to:
@@ -517,6 +577,44 @@ def incident_detail(request, incident_id):
     except Incident.DoesNotExist:
         return Response({'error': 'Incidente no encontrado'}, status=404)
 
+@api_view(['GET', 'POST'])
+@permission_classes([IsAuthenticated])
+def manage_incident_notes(request, incident_id):
+    # Gestionar notas de un incidente (Solo Analistas/Admin)
+    try:
+        user_role = getattr(request.user, 'profile', None) and request.user.profile.role or 'employee'
+        if user_role not in ['admin', 'analyst']:
+            return Response({'error': 'No autorizado'}, status=403)
+            
+        incident = Incident.objects.get(id=incident_id)
+        
+        if request.method == 'GET':
+            from .models import IncidentNote
+            from .serializers import IncidentNoteSerializer
+            notes = incident.notes.all()
+            serializer = IncidentNoteSerializer(notes, many=True)
+            return Response(serializer.data)
+            
+        elif request.method == 'POST':
+            content = request.data.get('content')
+            if not content:
+                return Response({'error': 'Contenido requerido'}, status=400)
+                
+            from .models import IncidentNote
+            from .serializers import IncidentNoteSerializer
+            
+            note = IncidentNote.objects.create(
+                incident=incident,
+                author=request.user,
+                content=content
+            )
+            return Response(IncidentNoteSerializer(note).data, status=201)
+            
+    except Incident.DoesNotExist:
+        return Response({'error': 'Incidente no encontrado'}, status=404)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def incident_stats(request):
@@ -535,6 +633,23 @@ def incident_stats(request):
         files_count = Incident.objects.filter(incident_type='file').count()
         urls_count = Incident.objects.filter(incident_type='url').count()
         
+        # Conteo por riesgo (para Dashboard)
+        by_risk = {
+            'CRITICAL': Incident.objects.filter(risk_level='CRITICAL').count(),
+            'HIGH': Incident.objects.filter(risk_level='HIGH').count(),
+            'MEDIUM': Incident.objects.filter(risk_level='MEDIUM').count(),
+            'LOW': Incident.objects.filter(risk_level='LOW').count(),
+            'SAFE': Incident.objects.filter(risk_level='SAFE').count(), # Usamos SAFE o LOW? El modelo tiene LOW, MEDIUM, HIGH, CRITICAL, UNKNOWN
+            'UNKNOWN': Incident.objects.filter(risk_level='UNKNOWN').count()
+        }
+        
+        # Conteo por estado
+        by_status = {
+            'pending': Incident.objects.filter(status='pending').count(),
+            'investigating': Incident.objects.filter(status='investigating').count(),
+            'resolved': Incident.objects.filter(status='resolved').count()
+        }
+        
         return Response({
             'total': total_incidents,
             'pending': pending_incidents,
@@ -542,7 +657,9 @@ def incident_stats(request):
             'by_type': {
                 'files': files_count,
                 'urls': urls_count
-            }
+            },
+            'by_risk': by_risk,
+            'by_status': by_status
         })
     except Exception as e:
         logger.error(f"Error en estadisticas: {e}")
@@ -561,10 +678,26 @@ def update_incident_status(request, incident_id):
         new_status = request.data.get('status')
         notes = request.data.get('analyst_notes')
         
-        if new_status in ['pending', 'investigating', 'resolved', 'closed']: # Updated choices to match model
+        if new_status in ['pending', 'investigating', 'resolved', 'closed']: 
+            # Validacion simple de transicion (opcional, pero recomendada)
+            # if incident.status == 'resolved' and new_status != 'resolved':
+            #    return Response({'error': 'No se puede reabrir incidentes resueltos'}, status=400)
+            
             incident.status = new_status
             if notes:
-                incident.analyst_notes = notes
+                # Agregar como nota tambien?
+                # incident.analyst_notes = notes # Legacy field
+                # Crear nota interna
+                try:
+                    from .models import IncidentNote
+                    IncidentNote.objects.create(
+                        incident=incident,
+                        author=request.user,
+                        content=f"[Cambio de Estado] {notes}"
+                    )
+                except:
+                    pass
+                
             incident.save()
             return Response({'message': 'Estado actualizado', 'status': new_status})
         else:
@@ -572,9 +705,70 @@ def update_incident_status(request, incident_id):
             
     except Incident.DoesNotExist:
         return Response({'error': 'Incidente no encontrado'}, status=404)
-from reportlab.pdfgen import canvas
-from reportlab.lib.pagesizes import letter
-from django.http import HttpResponse
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def get_incident_analysis_details(request, incident_id):
+    # Retorna detalles completos del analisis para el modal
+    try:
+        incident = Incident.objects.get(id=incident_id)
+        
+        # Seguridad
+        user_role = getattr(request.user, 'profile', None) and request.user.profile.role or 'employee'
+        if user_role == 'employee' and incident.reported_by != request.user:
+            return Response({'error': 'No autorizado'}, status=403)
+            
+        # Si ya existe un snapshot completo, retornarlo
+        if incident.analysis_result:
+             return Response(incident.analysis_result)
+
+        engines = []
+        
+        # 1. VirusTotal
+        if incident.virustotal_result:
+            vt = incident.virustotal_result
+            engines.append({
+                'name': 'VirusTotal',
+                'positives': vt.get('positives', 0),
+                'total': vt.get('total', 0),
+                'link': vt.get('permalink', 'https://www.virustotal.com/gui/'),
+                'status': 'MALICIOUS' if vt.get('positives', 0) > 0 else 'CLEAN'
+            })
+            
+        # 2. MetaDefender
+        if incident.metadefender_result:
+            md = incident.metadefender_result
+            data_id = md.get('data_id', '')
+            engines.append({
+                'name': 'MetaDefender',
+                'positives': md.get('positives', 0),
+                'total': md.get('total', 0),
+                'link': f"https://metadefender.opswat.com/results/file/{data_id}/regular/overview" if data_id else '#',
+                'status': 'MALICIOUS' if md.get('positives', 0) > 0 else 'CLEAN'
+            })
+            
+        # Gemini
+        gemini_exp = incident.gemini_analysis
+        gemini_rec = ""
+        
+        # Construir resultado
+        analysis_data = {
+            "engines": engines,
+            "gemini_explicacion": gemini_exp or "Análisis no disponible",
+            "gemini_recomendacion": gemini_rec
+        }
+        
+        # GUARDAR SNAPSHOT (Lazy Migration)
+        incident.analysis_result = analysis_data
+        incident.save(update_fields=['analysis_result'])
+        
+        return Response(analysis_data)
+
+    except Incident.DoesNotExist:
+        return Response({'error': 'Incidente no encontrado'}, status=404)
+    except Exception as e:
+        logger.error(f"Error generando PDF: {e}")
+        return Response({'error': str(e)}, status=500)
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
@@ -594,67 +788,123 @@ def generate_pdf_report(request, incident_id):
         p = canvas.Canvas(response, pagesize=letter)
         w, h = letter
 
-        # Encabezado
-        p.setFont("Helvetica-Bold", 16)
-        p.drawString(50, h - 50, f"Reporte de Incidente de Seguridad #{incident.id}")
-        
-        p.setFont("Helvetica", 12)
-        p.drawString(50, h - 80, f"Fecha: {incident.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
-        p.drawString(50, h - 100, f"Reportado por: {incident.reported_by.username}")
-        p.drawString(50, h - 120, f"Estado Actual: {incident.status.upper()}")
-        
-        # Detalles
-        p.line(50, h - 140, 550, h - 140)
-        
-        y = h - 170
+        # --- LOGO ---
+        import os
+        from django.conf import settings
+        # Ruta al logo: ../frontend/public/assets/logo_tecnicontrol.jpg
+        # Asumiendo BASE_DIR es backend/
+        logo_path = os.path.join(settings.BASE_DIR, '..', 'frontend', 'public', 'assets', 'logo_tecnicontrol.jpg')
+        if os.path.exists(logo_path):
+            try:
+                # Dibujar logo (x, y, width, height)
+                # Aspect ratio aprox 2:1? Ajustar segun necesidad
+                p.drawImage(logo_path, 50, h - 100, width=150, height=75, preserveAspectRatio=True, mask='auto')
+            except Exception as e:
+                logger.warning(f"No se pudo cargar logo PDF: {e}")
+        else:
+            logger.warning(f"Logo no encontrado en: {logo_path}")
+
+        # Encabezado Corregido (Desplazado por el logo)
+        p.setFont("Helvetica-Bold", 18)
+        p.drawString(220, h - 60, "REPORTE DE INCIDENTE")
         p.setFont("Helvetica-Bold", 12)
-        p.drawString(50, y, "Detalles del Analisis:")
-        y -= 20
+        p.drawString(220, h - 80, "TECNICONTROL AUTOMOTRIZ")
         
         p.setFont("Helvetica", 10)
-        p.drawString(50, y, f"Tipo: {incident.incident_type}")
-        y -= 15
-        p.drawString(50, y, f"Objetivo: {incident.url or incident.attached_file.name}")
-        y -= 15
-        p.drawString(50, y, f"Nivel de Riesgo: {incident.risk_level}")
-        y -= 25
+        p.drawString(50, h - 130, f"ID Incidente: #{incident.id}")
+        p.drawString(300, h - 130, f"Fecha: {incident.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        
+        p.drawString(50, h - 145, f"Reportado por: {incident.reported_by.username}")
+        p.drawString(300, h - 145, f"Estado: {incident.status.upper()}")
+        
+        # Linea separadora
+        p.line(50, h - 160, 550, h - 160)
+        
+        y = h - 200
+        p.setFont("Helvetica-Bold", 14)
+        p.drawString(50, y, "Resumen del Análisis")
+        y -= 30
+        
+        p.setFont("Helvetica", 11)
+        p.drawString(50, y, f"Tipo de Incidente: {incident.incident_type.upper()}")
+        y -= 20
+        target = incident.url or (incident.attached_file.name if incident.attached_file else "Desconocido")
+        # Cortar target si es muy largo
+        if len(target) > 70: target = target[:67] + "..."
+        p.drawString(50, y, f"Objetivo Analizado: {target}")
+        y -= 20
+        
+        # Riesgo con color? (No facil en PDF simple, usamos texto)
+        p.drawString(50, y, f"Nivel de Riesgo Evaluado: {incident.risk_level}")
+        y -= 30
         
         # Resultados Tecnicos
-        if incident.virustotal_result:
-            positives = incident.virustotal_result.get('positives', 0)
-            total = incident.virustotal_result.get('total', 0)
-            p.drawString(50, y, f"Motores Antivirus (VirusTotal/MetaDefender): {positives}/{total} detecciones")
-            y -= 25
+        p.setFont("Helvetica-Bold", 12)
+        p.drawString(50, y, "Motores de Seguridad")
+        y -= 20
+        p.setFont("Helvetica", 11)
+
+        # Intentar obtener snapshot
+        positives = 0
+        total = 0
+        if incident.analysis_result:
+             positives = incident.analysis_result.get('positives', incident.analysis_result.get('total_positives', 0))
+             total = incident.analysis_result.get('total', incident.analysis_result.get('total_engines', 0))
+        elif incident.virustotal_result:
+             positives = incident.virustotal_result.get('positives', 0)
+             total = incident.virustotal_result.get('total', 0)
+        
+        p.drawString(50, y, f"Detecciones: {positives} / {total}")
+        y -= 20
+        p.drawString(50, y, f"Motores Consultados: VirusTotal, MetaDefender, Google Safe Browsing")
+        y -= 40
 
         # Analisis IA
-        if incident.gemini_analysis:
+        if incident.gemini_analysis or (incident.analysis_result and incident.analysis_result.get('gemini_explicacion')):
             p.setFont("Helvetica-Bold", 12)
-            p.drawString(50, y, "Analisis de Asistente IA (Explicacion):")
+            p.drawString(50, y, "Informe de Inteligencia Artificial (Gemini)")
             y -= 20
             p.setFont("Helvetica-Oblique", 10)
             
-            # Logica simple para cortar texto largo
-            text = incident.gemini_analysis
-            lines = []
-            while len(text) > 90:
-                split_at = text[:90].rfind(' ')
-                if split_at == -1: split_at = 90
-                lines.append(text[:split_at])
-                text = text[split_at:].strip()
-            lines.append(text)
+            text = incident.gemini_analysis or incident.analysis_result.get('gemini_explicacion')
+            
+            # Wrap text simple
+            from textwrap import wrap
+            lines = wrap(text, width=90)
             
             for line in lines:
-                p.drawString(50, y, line)
+                 if y < 50:
+                     p.showPage()
+                     y = h - 50
+                     p.setFont("Helvetica-Oblique", 10)
+                 p.drawString(50, y, line)
+                 y -= 15
+            
+            y -= 10
+            # Recomendacion
+            rec = incident.analysis_result.get('gemini_recomendacion') if incident.analysis_result else None
+            if rec:
+                p.setFont("Helvetica-Bold", 10)
+                p.drawString(50, y, "Recomendación:")
                 y -= 15
+                p.setFont("Helvetica", 10)
+                lines = wrap(rec, width=90)
+                for line in lines:
+                    if y < 50:
+                        p.showPage()
+                        y = h - 50
+                    p.drawString(50, y, line)
+                    y -= 15
 
         # Footer
-        p.setFont("Helvetica", 8)
-        p.drawString(50, 30, "Reporte generado automaticamente por Sistema de Asistente de Ciberseguridad")
+        p.setFont("Helvetica-Oblique", 8)
+        p.drawString(50, 30, "Reporte generado por Asistente de Ciberseguridad - Tecnicontrol Automotriz")
+        p.drawString(400, 30, f"Página {p.getPageNumber()}")
         
         p.showPage()
         p.save()
         return response
-        
+
     except Incident.DoesNotExist:
         return Response({'error': 'Incidente no encontrado'}, status=404)
     except Exception as e:
