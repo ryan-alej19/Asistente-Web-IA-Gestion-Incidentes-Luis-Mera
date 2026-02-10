@@ -3,7 +3,7 @@ version: '3.8'
 services:
   backend:
     build: ./backend
-    container_name: luis-mera-backend
+    container_name: backend
     image: luis-mera-backend:v1
     ports:
       - "8000:8000"
@@ -16,7 +16,7 @@ services:
 
   frontend:
     build: ./frontend
-    container_name: luis-mera-frontend
+    container_name: frontend
     image: luis-mera-frontend:v1
     ports:
       - "3000:3000"
