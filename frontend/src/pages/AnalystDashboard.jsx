@@ -9,6 +9,7 @@ import StatisticsCards from '../components/analyst/StatisticsCards';
 import IncidentsTable from '../components/analyst/IncidentsTable';
 import IncidentDetailModal from '../components/analyst/IncidentDetailModal';
 import ChangeStateModal from '../components/analyst/ChangeStateModal';
+import API_URL from '../config/api';
 
 const AnalystDashboard = () => {
     const [stats, setStats] = useState(null);
@@ -38,11 +39,11 @@ const AnalystDashboard = () => {
             const config = { headers: { Authorization: `Token ${token}` } };
 
             // 1. Get Stats
-            const statsRes = await axios.get('http://localhost:8000/api/incidents/stats/', config);
+            const statsRes = await axios.get(`${API_URL}/api/incidents/stats/`, config);
             setStats(statsRes.data);
 
             // 2. Get All Incidents
-            const incidentsRes = await axios.get('http://localhost:8000/api/incidents/list/', config);
+            const incidentsRes = await axios.get(`${API_URL}/api/incidents/list/`, config);
             setIncidents(incidentsRes.data.results);
 
             setError(null);

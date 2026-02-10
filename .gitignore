@@ -5,17 +5,25 @@ __pycache__/
 *$py.class
 backend/venv/
 venv/
+backend/env/
 env/
+
+# Environment Variables
 .env
+*.env
+.env.local
+.env.production.local
+backend/.env
 
 # Django
 *.log
 local_settings.py
-db.sqlite3
+backend/db.sqlite3
 media
-staticfiles
+backend/staticfiles/
 
 # Node
-node_modules/
-build/
+frontend/node_modules/
+frontend/build/
+frontend/.env.local
 .DS_Store

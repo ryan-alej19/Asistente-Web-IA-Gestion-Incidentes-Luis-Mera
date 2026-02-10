@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import axios from 'axios';
 import { Icons } from './Icons';
+import API_URL from '../config/api';
 
 /**
  * Botones de exportación (CSV / PDF) para RF-06
@@ -12,7 +13,7 @@ const ExportButtons = () => {
         try {
             setDownloading(true);
             const token = localStorage.getItem('access_token');
-            const url = `http://localhost:8000/api/incidents/export/${format}/`;
+            const url = `${API_URL}/api/incidents/export/${format}/`;
 
             const response = await axios.get(url, {
                 headers: { Authorization: `Bearer ${token}` },

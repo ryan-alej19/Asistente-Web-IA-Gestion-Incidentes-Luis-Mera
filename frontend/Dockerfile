@@ -1,17 +1,16 @@
-# Frontend Dockerfile
-FROM node:20-alpine
+FROM node:18-slim
 
 WORKDIR /app
 
 # Instalar dependencias
-COPY package.json package-lock.json* ./
+COPY package*.json .
 RUN npm install
 
-# Copiar código fuente
+# Copiar código
 COPY . .
 
-# Exponer puerto (Configurable via .env)
-EXPOSE 3001
+# Exponer puerto
+EXPOSE 3000
 
-# Iniciar aplicación
+# Comando de inicio
 CMD ["npm", "start"]

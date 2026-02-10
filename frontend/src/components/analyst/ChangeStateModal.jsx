@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, CheckCircle, AlertTriangle, RefreshCw, Loader2 } from 'lucide-react';
+import API_URL from '../../config/api';
 
 const ChangeStateModal = ({ incident, onClose, onUpdate }) => {
     const [status, setStatus] = useState(incident.status);
@@ -26,7 +27,7 @@ const ChangeStateModal = ({ incident, onClose, onUpdate }) => {
 
         try {
             const token = localStorage.getItem('token');
-            await axios.patch(`http://localhost:8000/api/incidents/${incident.id}/update-status/`,
+            await axios.patch(`${API_URL}/api/incidents/${incident.id}/update-status/`,
                 { status: status, analyst_notes: note },
                 { headers: { Authorization: `Token ${token}` } }
             );

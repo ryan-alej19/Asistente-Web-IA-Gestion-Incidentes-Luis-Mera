@@ -9,6 +9,7 @@ import IncidentsTable from '../components/analyst/IncidentsTable';
 import IncidentDetailModal from '../components/analyst/IncidentDetailModal';
 import ChangeStateModal from '../components/analyst/ChangeStateModal';
 import UsersTable from '../components/admin/UsersTable';
+import API_URL from '../config/api';
 
 const AdminDashboard = () => {
     // Shared State
@@ -49,8 +50,8 @@ const AdminDashboard = () => {
             const token = localStorage.getItem('token');
             const config = { headers: { Authorization: `Token ${token}` } };
             const [statsRes, usersRes] = await Promise.all([
-                axios.get('http://localhost:8000/api/incidents/stats/', config),
-                axios.get('http://localhost:8000/api/users/list/', config)
+                axios.get(`${API_URL}/api/incidents/stats/`, config),
+                axios.get(`${API_URL}/api/users/list/`, config)
             ]);
             setStats(statsRes.data);
             setUsers(usersRes.data);
@@ -73,7 +74,7 @@ const AdminDashboard = () => {
                 }
             };
 
-            const response = await axios.get('http://localhost:8000/api/incidents/list/', config);
+            const response = await axios.get(`${API_URL}/api/incidents/list/`, config);
             setIncidents(response.data.results);
 
         } catch (err) {
@@ -95,7 +96,7 @@ const AdminDashboard = () => {
         try {
             const token = localStorage.getItem('token');
             const config = { headers: { Authorization: `Token ${token}` } };
-            await axios.patch(`http://localhost:8000/api/users/${userId}/toggle_status/`, {}, config);
+            await axios.patch(`${API_URL}/api/users/${userId}/toggle_status/`, {}, config);
             fetchStatsAndUsers(); // Update users list
         } catch (err) {
             const msg = err.response?.data?.error || "Error al cambiar estado";
@@ -109,7 +110,7 @@ const AdminDashboard = () => {
         try {
             const token = localStorage.getItem('token');
             const config = { headers: { Authorization: `Token ${token}` } };
-            await axios.patch(`http://localhost:8000/api/users/${userId}/change_role/`, { role: newRole }, config);
+            await axios.patch(`${API_URL}/api/users/${userId}/change_role/`, { role: newRole }, config);
             fetchStatsAndUsers(); // Update users list
         } catch (err) {
             const msg = err.response?.data?.error || "Error al cambiar rol";

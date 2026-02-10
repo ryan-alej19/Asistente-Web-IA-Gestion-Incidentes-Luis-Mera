@@ -3,6 +3,7 @@ import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { User, Lock, LogIn, AlertOctagon, ShieldCheck, Eye, EyeOff, Loader2 } from 'lucide-react';
+import API_URL from '../config/api';
 
 const Login = ({ setAuth, setRole }) => {
     const [username, setUsername] = useState('');
@@ -18,7 +19,7 @@ const Login = ({ setAuth, setRole }) => {
         setError('');
 
         try {
-            const response = await axios.post('http://localhost:8000/api/auth/token/', {
+            const response = await axios.post(`${API_URL}/api/auth/token/`, {
                 username,
                 password
             });

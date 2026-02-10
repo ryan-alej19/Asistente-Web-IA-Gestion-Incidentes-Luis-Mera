@@ -134,3 +134,56 @@ LOGGING = {
         },
     },
 }
+
+# ═══════════════════════════════════════════════════════════
+# CONFIGURACIÓN DE PRODUCCIÓN - NO MODIFICAR MANUALMENTE
+# Las variables se leen desde variables de entorno en Render
+# ═══════════════════════════════════════════════════════════
+import os as _os
+
+# Override SECRET_KEY desde entorno si existe
+_secret_key = _os.environ.get('SECRET_KEY')
+if _secret_key:
+    SECRET_KEY = _secret_key
+
+# Modo Debug (False en producción)
+_debug_env = _os.environ.get('DEBUG', 'False')
+DEBUG = _debug_env == 'True'
+
+# Hosts permitidos desde entorno
+_allowed_hosts = _os.environ.get('ALLOWED_HOSTS', '')
+if _allowed_hosts:
+    ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts.split(',')]
+
+# Directorio para archivos estáticos compilados
+STATIC_ROOT = BASE_DIR / 'staticfiles'
+
+# Insertar WhiteNoise para servir estáticos sin Nginx
+try:
+    _whitenoise = 'whitenoise.middleware.WhiteNoiseMiddleware'
+    if _whitenoise not in MIDDLEWARE:
+        _security_idx = MIDDLEWARE.index(
+            'django.middleware.security.SecurityMiddleware'
+        )
+        MIDDLEWARE.insert(_security_idx + 1, _whitenoise)
+    STATICFILES_STORAGE = (
+        'whitenoise.storage.CompressedManifestStaticFilesStorage'
+    )
+except (ValueError, NameError):
+    pass
+
+# CORS: dominios del frontend permitidos
+_cors_origins = _os.environ.get('CORS_ALLOWED_ORIGINS', '')
+if _cors_origins:
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip() for origin in _cors_origins.split(',')
+    ]
+
+# Base de datos: SQLite con ruta absoluta para Render
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
+    }
+}
+# ═══════════════════════════════════════════════════════════

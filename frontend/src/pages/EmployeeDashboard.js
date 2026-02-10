@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { GeminiLogo, VirusTotalLogo, MetaDefenderLogo } from '../components/BrandLogos';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
+import API_URL from '../config/api';
 
 const EmployeeDashboard = () => {
   const [analysisType, setAnalysisType] = useState('url'); // url | file
@@ -60,7 +61,7 @@ const EmployeeDashboard = () => {
     try {
       const token = localStorage.getItem('token');
       const config = { headers: { Authorization: `Token ${token}` } };
-      const res = await axios.post('http://localhost:8000/api/incidents/analyze-url-preview/', { url: urlToAnalyze }, config);
+      const res = await axios.post(`${API_URL}/api/incidents/analyze-url-preview/`, { url: urlToAnalyze }, config);
       setAnalysisResult(res.data);
     } catch (err) {
       console.error(err);
@@ -82,11 +83,11 @@ const EmployeeDashboard = () => {
       const config = { headers: { Authorization: `Token ${token}` } };
       let res;
       if (analysisType === 'url') {
-        res = await axios.post('http://localhost:8000/api/incidents/analyze-url-preview/', { url }, config);
+        res = await axios.post(`${API_URL}/api/incidents/analyze-url-preview/`, { url }, config);
       } else {
         const formData = new FormData();
         formData.append('file', attachedFile);
-        res = await axios.post('http://localhost:8000/api/incidents/analyze-file-preview/', formData, config);
+        res = await axios.post(`${API_URL}/api/incidents/analyze-file-preview/`, formData, config);
       }
       setAnalysisResult(res.data);
     } catch (err) {

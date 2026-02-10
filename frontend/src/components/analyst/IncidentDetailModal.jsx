@@ -7,6 +7,7 @@ import {
     ShieldCheck, AlertOctagon, Info, AlertCircle, Download
 } from 'lucide-react';
 import { GeminiLogo } from '../BrandLogos';
+import API_URL from '../../config/api';
 
 const IncidentDetailModal = ({ incident, onClose, onUpdate }) => {
     const [activeTab, setActiveTab] = useState('info');
@@ -24,7 +25,7 @@ const IncidentDetailModal = ({ incident, onClose, onUpdate }) => {
     const handleDownloadReport = async () => {
         try {
             const token = localStorage.getItem('token');
-            const response = await axios.get(`http://localhost:8000/api/incidents/${incident.id}/pdf/`, {
+            const response = await axios.get(`${API_URL}/api/incidents/${incident.id}/pdf/`, {
                 headers: { Authorization: `Token ${token}` },
                 responseType: 'blob'
             });
@@ -45,7 +46,7 @@ const IncidentDetailModal = ({ incident, onClose, onUpdate }) => {
         setLoadingNotes(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get(`http://localhost:8000/api/incidents/${incident.id}/notes/`, {
+            const res = await axios.get(`${API_URL}/api/incidents/${incident.id}/notes/`, {
                 headers: { Authorization: `Token ${token}` }
             });
             setNotes(res.data);
@@ -60,7 +61,7 @@ const IncidentDetailModal = ({ incident, onClose, onUpdate }) => {
         setLoadingAnalysis(true);
         try {
             const token = localStorage.getItem('token');
-            const res = await axios.get(`http://localhost:8000/api/incidents/${incident.id}/analysis-details/`, {
+            const res = await axios.get(`${API_URL}/api/incidents/${incident.id}/analysis-details/`, {
                 headers: { Authorization: `Token ${token}` }
             });
             setAnalysisDetails(res.data);
@@ -75,7 +76,7 @@ const IncidentDetailModal = ({ incident, onClose, onUpdate }) => {
         if (!newNote.trim()) return;
         try {
             const token = localStorage.getItem('token');
-            await axios.post(`http://localhost:8000/api/incidents/${incident.id}/notes/`,
+            await axios.post(`${API_URL}/api/incidents/${incident.id}/notes/`,
                 { content: newNote },
                 { headers: { Authorization: `Token ${token}` } }
             );

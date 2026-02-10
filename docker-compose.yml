@@ -1,34 +1,28 @@
+version: '3.8'
+
 services:
   backend:
-    build:
-      context: ./backend
+    build: ./backend
     container_name: tesis-backend
-    volumes:
-      - ./backend:/app
     ports:
       - "8000:8000"
     env_file:
       - ./backend/.env
-    # Comando opcional para asegurar migraciones al iniciar (descomentar si se desea)
-    # command: sh -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    volumes:
+      - ./backend:/app
+      - sqlite_data:/app/data
+    restart: unless-stopped
 
   frontend:
-    build:
-      context: ./frontend
+    build: ./frontend
     container_name: tesis-frontend
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
     ports:
-      - "3001:3001"
-    env_file:
-      - ./frontend/.env
+      - "3000:3000"
     environment:
-      - CHOKIDAR_USEPOLLING=true # Necesario para hot-reload en Windows/algunos sistemas
-      - WDS_SOCKET_PORT=0
-    stdin_open: true # Necesario para react-scripts en docker
-    tty: true
+      - REACT_APP_API_URL=http://localhost:8000
     depends_on:
       - backend
+    restart: unless-stopped
 
-# Red por defecto creada automáticamente, no es necesaria config extra para este caso simple
+volumes:
+  sqlite_data:
