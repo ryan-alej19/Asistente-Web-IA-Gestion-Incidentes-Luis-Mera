@@ -55,7 +55,7 @@ function App() {
         <Route path="/" element={<Navigate to="/login" />} />
         <Route path="*" element={<Navigate to="/login" />} />
       </Routes>
-      <div style={{ position: 'fixed', bottom: 10, right: 10, fontSize: '10px', color: '#666' }}>v.DEBUG.1.0</div>
+
     </BrowserRouter >
   );
 }

@@ -176,9 +176,7 @@ const Login = ({ setAuth, setRole }) => {
 
                     {/* Footer */}
                     <div className="px-8 pb-8 text-center">
-                        <p className="text-xs text-center text-gray-500 border-t border-border pt-6">
-                            Protegido por <span className="text-gray-400 font-medium">Talleres Luis Mera Security</span> v1.0
-                        </p>
+
                     </div>
                 </div>
             </motion.div>

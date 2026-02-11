@@ -116,9 +116,7 @@ const IncidentDetailModal = ({ incident, onClose, onUpdate }) => {
                             <div>
                                 <h2 className="text-xl font-bold text-white flex items-center gap-2">
                                     Incidente #{incident.id}
-                                    <span className="text-sm font-normal text-gray-400 px-2 py-0.5 rounded-full border border-border bg-background">
-                                        v1.0
-                                    </span>
+
                                 </h2>
                                 <div className="flex items-center gap-4 mt-1 text-sm text-gray-400">
                                     <div className="flex items-center gap-1">
