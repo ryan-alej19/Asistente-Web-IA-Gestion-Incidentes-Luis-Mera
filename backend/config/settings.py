@@ -178,6 +178,7 @@ if _cors_origins:
     CORS_ALLOWED_ORIGINS = [
         origin.strip() for origin in _cors_origins.split(',')
     ]
+    CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 # Base de datos: SQLite con ruta absoluta para Render
 DATABASES = {
