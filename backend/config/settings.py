@@ -150,34 +150,17 @@ if _secret_key:
 _debug_env = _os.environ.get('DEBUG', 'False')
 DEBUG = _debug_env == 'True'
 
-# Hosts permitidos desde entorno
-_allowed_hosts = _os.environ.get('ALLOWED_HOSTS', '')
-if _allowed_hosts:
-    ALLOWED_HOSTS = [h.strip() for h in _allowed_hosts.split(',')]
+    # Permitir todo en producción temporalmente para descartar errores de Host
+    ALLOWED_HOSTS = ['*']
 
-# Directorio para archivos estáticos compilados
-STATIC_ROOT = BASE_DIR / 'staticfiles'
-
-# Insertar WhiteNoise para servir estáticos sin Nginx
-try:
-    _whitenoise = 'whitenoise.middleware.WhiteNoiseMiddleware'
-    if _whitenoise not in MIDDLEWARE:
-        _security_idx = MIDDLEWARE.index(
-            'django.middleware.security.SecurityMiddleware'
-        )
-        MIDDLEWARE.insert(_security_idx + 1, _whitenoise)
-    STATICFILES_STORAGE = (
-        'whitenoise.storage.CompressedManifestStaticFilesStorage'
-    )
-except (ValueError, NameError):
-    pass
-
-# CORS: dominios del frontend permitidos
-_cors_origins = _os.environ.get('CORS_ALLOWED_ORIGINS', '')
-if _cors_origins:
-    CORS_ALLOWED_ORIGINS = [
-        origin.strip() for origin in _cors_origins.split(',')
-    ]
+    # CORS: dominios del frontend permitidos
+    _cors_origins = _os.environ.get('CORS_ALLOWED_ORIGINS', '')
+    if _cors_origins:
+        CORS_ALLOWED_ORIGINS = [
+            origin.strip() for origin in _cors_origins.split(',')
+        ]
+        # CSRF necesita scheme (https://)
+        CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
     CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 # Base de datos: SQLite con ruta absoluta para Render
