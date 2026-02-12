@@ -1,0 +1,18 @@
+django==5.1.4
+djangorestframework
+django-cors-headers
+python-decouple
+requests
+google-generativeai>=0.7.0
+reportlab>=4.0.0
+Pillow>=10.0.0
+
+# JWT Auth
+djangorestframework-simplejwt>=5.3
+
+# Environment
+python-dotenv>=1.0
+
+# Production Server
+gunicorn==21.2.0
+whitenoise==6.6.0
