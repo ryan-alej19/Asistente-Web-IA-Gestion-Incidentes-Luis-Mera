@@ -4,6 +4,11 @@ import random
 from datetime import timedelta
 from django.utils import timezone
 
+import sys
+
+# Add project root to sys.path to allow importing config
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 # Setup Django Environment
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
