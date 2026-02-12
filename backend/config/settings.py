@@ -150,8 +150,8 @@ if _secret_key:
 _debug_env = _os.environ.get('DEBUG', 'False')
 DEBUG = _debug_env == 'True'
 
-# Permitir todo en producción temporalmente para descartar errores de Host
-ALLOWED_HOSTS = ['*']
+# Permitir todo en producción temporalmente para descartar errores de Host (Fixed Indentation)
+ALLOWED_HOSTS = ["*"]
 
 # CORS: dominios del frontend permitidos
 _cors_origins = _os.environ.get('CORS_ALLOWED_ORIGINS', '')
