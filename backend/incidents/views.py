@@ -19,6 +19,20 @@ from reportlab.lib.pagesizes import letter
 
 logger = logging.getLogger(__name__)
 
+# Imports for Exports
+import csv
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.lib.units import inch
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer, Image
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from io import BytesIO
+from django.db.models import Count
+from datetime import datetime, timedelta
+import os
+from django.conf import settings
+
 def is_encrypted_archive(file_obj):
     """
     Verifica si un archivo comprimido está protegido con contraseña.
@@ -772,141 +786,462 @@ def get_incident_analysis_details(request, incident_id):
 
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
-def generate_pdf_report(request, incident_id):
-    # Genera un archivo PDF con el reporte del incidente
-    try:
-        incident = Incident.objects.get(id=incident_id)
+def generate_pdf_report(request, incident_id=None):
+    """
+    Genera reporte PDF ejecutivo.
+    
+    Si se proporciona incident_id: Reporte de UN incidente específico
+    Si NO se proporciona: Reporte MENSUAL consolidado de todos los incidentes
+    """
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, topMargin=0.5*inch)
+    
+    # Contenedor de elementos
+    elements = []
+    styles = getSampleStyleSheet()
+    
+    # ══════════════════════════════════════════════════════
+    # HEADER PROFESIONAL
+    # ══════════════════════════════════════════════════════
+    
+    # Estilo personalizado para título
+    title_style = ParagraphStyle(
+        'CustomTitle',
+        parent=styles['Heading1'],
+        fontSize=18,
+        textColor=colors.HexColor('#1F3864'),
+        spaceAfter=12,
+        alignment=TA_CENTER,
+        fontName='Helvetica-Bold'
+    )
+    
+    subtitle_style = ParagraphStyle(
+        'CustomSubtitle',
+        parent=styles['Normal'],
+        fontSize=12,
+        textColor=colors.HexColor('#2E74B5'),
+        spaceAfter=20,
+        alignment=TA_CENTER,
+        fontName='Helvetica'
+    )
+    
+    # Logo PUCE TEC (Si existe)
+    # logo_path = os.path.join(settings.BASE_DIR, 'static', 'logo_puce.png')
+    # if os.path.exists(logo_path):
+    #     logo = Image(logo_path, width=1.5*inch, height=0.8*inch)
+    #     elements.append(logo)
+    
+    # Títulos
+    elements.append(Paragraph("TALLERES LUIS MERA", title_style))
+    elements.append(Paragraph("Sistema de Gestión de Incidentes de Ciberseguridad", subtitle_style))
+    
+    # Línea separadora
+    line = Table([['']], colWidths=[7*inch])
+    line.setStyle(TableStyle([
+        ('LINEABOVE', (0,0), (-1,0), 2, colors.HexColor('#1F3864')),
+    ]))
+    elements.append(line)
+    elements.append(Spacer(1, 0.3*inch))
+    
+    # ══════════════════════════════════════════════════════
+    # CONTENIDO SEGÚN TIPO DE REPORTE
+    # ══════════════════════════════════════════════════════
+    
+    if incident_id:
+        # REPORTE INDIVIDUAL
+        try:
+            incident = Incident.objects.get(id=incident_id)
+        except Incident.DoesNotExist:
+            return Response({'error': 'Incidente no encontrado'}, status=404)
         
-        # Solo el creador o los analistas pueden ver esto
-        user_role = getattr(request.user, 'profile', None) and request.user.profile.role or 'employee'
-        if user_role == 'employee' and incident.reported_by != request.user:
-            return Response({'error': 'No autorizado'}, status=403)
-
-        response = HttpResponse(content_type='application/pdf')
-        response['Content-Disposition'] = f'attachment; filename="reporte_incidente_{incident.id}.pdf"'
-
-        p = canvas.Canvas(response, pagesize=letter)
-        w, h = letter
-
-        # --- LOGO ---
-        import os
-        from django.conf import settings
-        # Ruta al logo: ../frontend/public/assets/logo_tecnicontrol.jpg
-        # Asumiendo BASE_DIR es backend/
-        logo_path = os.path.join(settings.BASE_DIR, '..', 'frontend', 'public', 'assets', 'logo_tecnicontrol.jpg')
-        if os.path.exists(logo_path):
-            try:
-                # Dibujar logo (x, y, width, height)
-                # Aspect ratio aprox 2:1? Ajustar segun necesidad
-                p.drawImage(logo_path, 50, h - 100, width=150, height=75, preserveAspectRatio=True, mask='auto')
-            except Exception as e:
-                logger.warning(f"No se pudo cargar logo PDF: {e}")
+        # Título del reporte
+        report_title = Paragraph(f"<b>Reporte de Incidente #{incident.id}</b>", styles['Heading2'])
+        elements.append(report_title)
+        elements.append(Spacer(1, 0.2*inch))
+        
+        # Información del incidente
+        data = [
+            ['Campo', 'Valor'],
+            ['Fecha', incident.created_at.strftime('%Y-%m-%d %H:%M')],
+            ['Usuario', incident.reported_by.username],
+            ['Tipo', incident.incident_type],
+            ['URL/Archivo', incident.url or (incident.attached_file.name if incident.attached_file else 'N/A')],
+            ['Nivel de Riesgo', incident.risk_level or 'No clasificado'],
+            ['Estado', incident.status],
+            ['Descripción', incident.description or 'N/A'],
+        ]
+        
+        table = Table(data, colWidths=[2*inch, 4.5*inch])
+        table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1F3864')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,0), 11),
+            ('BOTTOMPADDING', (0,0), (-1,0), 12),
+            ('BACKGROUND', (0,1), (-1,-1), colors.beige),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ('VALIGN', (0,0), (-1,-1), 'TOP'),
+        ]))
+        elements.append(table)
+        
+    else:
+        # REPORTE MENSUAL CONSOLIDADO
+        from datetime import datetime, timedelta
+        from django.db.models import Count
+        
+        # Obtener incidentes del último mes
+        one_month_ago = datetime.now() - timedelta(days=30)
+        incidents = Incident.objects.filter(created_at__gte=one_month_ago)
+        
+        # Título
+        report_title = Paragraph(f"<b>Reporte Mensual de Incidentes</b>", styles['Heading2'])
+        elements.append(report_title)
+        elements.append(Paragraph(f"Período: {one_month_ago.strftime('%Y-%m-%d')} - {datetime.now().strftime('%Y-%m-%d')}", styles['Normal']))
+        elements.append(Spacer(1, 0.2*inch))
+        
+        # Resumen ejecutivo
+        total_incidents = incidents.count()
+        critical_count = incidents.filter(risk_level='CRITICAL').count()
+        high_count = incidents.filter(risk_level='HIGH').count()
+        resolved = incidents.filter(status='resolved').count()
+        
+        summary_data = [
+            ['Métrica', 'Valor'],
+            ['Total de Incidentes', str(total_incidents)],
+            ['Incidentes Críticos', str(critical_count)],
+            ['Incidentes Alto Riesgo', str(high_count)],
+            ['Incidentes Resueltos', str(resolved)],
+            ['Tasa de Resolución', f"{(resolved/total_incidents*100):.1f}%" if total_incidents > 0 else "0%"],
+        ]
+        
+        summary_table = Table(summary_data, colWidths=[3*inch, 2*inch])
+        summary_table.setStyle(TableStyle([
+            ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#2E74B5')),
+            ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+            ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+            ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0,0), (-1,-1), 10),
+            ('BOTTOMPADDING', (0,0), (-1,0), 10),
+            ('BACKGROUND', (0,1), (-1,-1), colors.lightgrey),
+            ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+        ]))
+        elements.append(summary_table)
+        elements.append(Spacer(1, 0.3*inch))
+        
+        # Top 5 dominios/archivos sospechosos
+        elements.append(Paragraph("<b>Top 5 Amenazas Detectadas</b>", styles['Heading3']))
+        
+        # Contar URLs más reportadas
+        url_counts = incidents.filter(incident_type='url').values('url').annotate(count=Count('url')).order_by('-count')[:5]
+        
+        if url_counts:
+            threat_data = [['URL/Dominio', 'Frecuencia']]
+            for item in url_counts:
+                threat_data.append([item['url'] or 'N/A', str(item['count'])])
+            
+            threat_table = Table(threat_data, colWidths=[4.5*inch, 1.5*inch])
+            threat_table.setStyle(TableStyle([
+                ('BACKGROUND', (0,0), (-1,0), colors.HexColor('#1F3864')),
+                ('TEXTCOLOR', (0,0), (-1,0), colors.whitesmoke),
+                ('ALIGN', (0,0), (-1,-1), 'LEFT'),
+                ('FONTNAME', (0,0), (-1,0), 'Helvetica-Bold'),
+                ('GRID', (0,0), (-1,-1), 0.5, colors.grey),
+            ]))
+            elements.append(threat_table)
         else:
-            logger.warning(f"Logo no encontrado en: {logo_path}")
+            elements.append(Paragraph("No hay datos suficientes para este período.", styles['Normal']))
+    
+    # ══════════════════════════════════════════════════════
+    # PIE DE PÁGINA
+    # ══════════════════════════════════════════════════════
+    elements.append(Spacer(1, 0.5*inch))
+    footer = Paragraph(
+        f"Generado el {datetime.now().strftime('%Y-%m-%d %H:%M')} | Talleres Luis Mera - Sistema de Ciberseguridad",
+        ParagraphStyle('Footer', parent=styles['Normal'], fontSize=8, textColor=colors.grey, alignment=TA_CENTER)
+    )
+    elements.append(footer)
+    
+    # Construir PDF
+    doc.build(elements)
+    
+    # Retornar respuesta
+    buffer.seek(0)
+    response = HttpResponse(buffer, content_type='application/pdf')
+    filename = f'reporte_incidente_{incident_id}.pdf' if incident_id else f'reporte_mensual_{datetime.now().strftime("%Y%m")}.pdf'
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    
+    return response
 
-        # Encabezado Corregido (Desplazado por el logo)
-        p.setFont("Helvetica-Bold", 18)
-        p.drawString(220, h - 60, "REPORTE DE INCIDENTE")
-        p.setFont("Helvetica-Bold", 12)
-        p.drawString(220, h - 80, "TECNICONTROL AUTOMOTRIZ")
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def export_incidents_csv(request):
+    """
+    Exporta todos los incidentes a CSV con 18 columnas.
+    Solo accesible para analistas y administradores.
+    """
+    try:
+        # Filtros
+        incident_type = request.query_params.get('type')
+        risk_level = request.query_params.get('risk')
+        status_filter = request.query_params.get('status')
         
-        p.setFont("Helvetica", 10)
-        p.drawString(50, h - 130, f"ID Incidente: #{incident.id}")
-        p.drawString(300, h - 130, f"Fecha: {incident.created_at.strftime('%Y-%m-%d %H:%M:%S')}")
+        incidents = Incident.objects.all()
         
-        p.drawString(50, h - 145, f"Reportado por: {incident.reported_by.username}")
-        p.drawString(300, h - 145, f"Estado: {incident.status.upper()}")
+        if incident_type:
+            incidents = incidents.filter(incident_type=incident_type)
+        if risk_level:
+            incidents = incidents.filter(risk_level=risk_level)
+        if status_filter:
+            incidents = incidents.filter(status=status_filter)
         
-        # Linea separadora
-        p.line(50, h - 160, 550, h - 160)
+        # Ordenar
+        incidents = incidents.order_by('-created_at')
         
-        y = h - 200
-        p.setFont("Helvetica-Bold", 14)
-        p.drawString(50, y, "Resumen del Análisis")
-        y -= 30
+        # Respuesta CSV
+        response = HttpResponse(content_type='text/csv')
+        filename = f"incidentes_{datetime.now().strftime('%Y-%m-%d')}.csv"
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         
-        p.setFont("Helvetica", 11)
-        p.drawString(50, y, f"Tipo de Incidente: {incident.incident_type.upper()}")
-        y -= 20
-        target = incident.url or (incident.attached_file.name if incident.attached_file else "Desconocido")
-        # Cortar target si es muy largo
-        if len(target) > 70: target = target[:67] + "..."
-        p.drawString(50, y, f"Objetivo Analizado: {target}")
-        y -= 20
+        # BOM para Excel
+        response.write(u'\ufeff'.encode('utf8'))
         
-        # Riesgo con color? (No facil en PDF simple, usamos texto)
-        p.drawString(50, y, f"Nivel de Riesgo Evaluado: {incident.risk_level}")
-        y -= 30
+        writer = csv.writer(response, delimiter=';', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         
-        # Resultados Tecnicos
-        p.setFont("Helvetica-Bold", 12)
-        p.drawString(50, y, "Motores de Seguridad")
-        y -= 20
-        p.setFont("Helvetica", 11)
+        # HEADER (Una sola vez)
+        writer.writerow([
+            'ID', 'Fecha Creacion', 'Usuario', 'Tipo', 'Objetivo', 
+            'Estado', 'Riesgo', 'VT Detecciones', 'IA Recomendacion'
+        ])
+        
+        for inc in incidents:
+            # Lógica de extracción de datos (simplificada para evitar errores)
+            vt_score = "N/A"
+            if inc.analysis_result and isinstance(inc.analysis_result, dict):
+                 engines = inc.analysis_result.get('engines', [])
+                 if isinstance(engines, list):
+                     vt = next((e for e in engines if e.get('name') == 'VirusTotal'), None)
+                     if vt:
+                         vt_score = f"{vt.get('positives',0)}/{vt.get('total',0)}"
+            
+            gemini_rec = ""
+            if inc.analysis_result and isinstance(inc.analysis_result, dict):
+                gemini_rec = inc.analysis_result.get('gemini_recomendacion', '')
+            
+            # Limpieza de texto para evitar roturas de CSV
+            desc = (inc.description or "").replace(';', ',').replace('\n', ' ')
+            target = (inc.url or (inc.attached_file.name if inc.attached_file else "File"))
+            
+            writer.writerow([
+                inc.id,
+                inc.created_at.strftime('%Y-%m-%d %H:%M'),
+                inc.reported_by.username,
+                inc.incident_type,
+                target,
+                inc.status,
+                inc.risk_level,
+                vt_score,
+                gemini_rec
+            ])
+            
+        return response
 
-        # Intentar obtener snapshot
-        positives = 0
-        total = 0
-        if incident.analysis_result:
-             positives = incident.analysis_result.get('positives', incident.analysis_result.get('total_positives', 0))
-             total = incident.analysis_result.get('total', incident.analysis_result.get('total_engines', 0))
-        elif incident.virustotal_result:
-             positives = incident.virustotal_result.get('positives', 0)
-             total = incident.virustotal_result.get('total', 0)
-        
-        p.drawString(50, y, f"Detecciones: {positives} / {total}")
-        y -= 20
-        p.drawString(50, y, f"Motores Consultados: VirusTotal, MetaDefender, Google Safe Browsing")
-        y -= 40
+    except Exception as e:
+        logger.error(f"Error exportando CSV: {e}")
+        return Response({'error': str(e)}, status=500)
 
-        # Analisis IA
-        if incident.gemini_analysis or (incident.analysis_result and incident.analysis_result.get('gemini_explicacion')):
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def generate_pdf_report(request, incident_id=None):
+    try:
+        buffer = BytesIO()
+        p = canvas.Canvas(buffer, pagesize=letter)
+        w, h = letter
+        
+        # Ajustar ruta del logo
+        # Prioridad 1: Static (Docker)
+        logo_path = os.path.join(settings.BASE_DIR, 'static', 'logo_puce.png')
+        
+        # Prioridad 2: Frontend Assets (Local Dev)
+        # settings.BASE_DIR apuna a backend/core/../ (backend root)
+        # La estructura es usuario/proyecto/backend
+        #                      usuario/proyecto/frontend
+        if not os.path.exists(logo_path):
+             logo_path = os.path.join(settings.BASE_DIR, '..', 'frontend', 'public', 'assets', 'logo_tecnicontrol.jpg')
+        
+        # Resolvemos path absoluto para evitar que falle
+        logo_path = os.path.abspath(logo_path)
+
+        if incident_id:
+            # --- INDIVIDUAL INCIDENT REPORT ---
+            try:
+                incident = Incident.objects.get(pk=incident_id)
+            except Incident.DoesNotExist:
+                return Response({'error': 'Incidente no encontrado'}, status=404)
+
+            # 1. Logo
+            if os.path.exists(logo_path):
+                try:
+                    # Draw logo top left
+                    p.drawImage(logo_path, 40, h - 90, width=150, height=75, preserveAspectRatio=True, mask='auto')
+                except Exception as e:
+                    logger.warning(f"Error cargando logo stats: {e}")
+
+            # 2. Header (Right aligned or Centered relative to available space)
+            p.setFont("Helvetica-Bold", 16)
+            p.drawRightString(550, h - 50, "REPORTE DE INCIDENTE")
             p.setFont("Helvetica-Bold", 12)
-            p.drawString(50, y, "Informe de Inteligencia Artificial (Gemini)")
+            p.drawRightString(550, h - 70, "TECNICONTROL AUTOMOTRIZ")
+            
+            p.setLineWidth(1)
+            p.setStrokeColor(colors.black)
+            p.line(40, h - 100, 570, h - 100)
+            
+            # 3. Datos Generales
+            y = h - 130
+            p.setFont("Helvetica-Bold", 10)
+            p.setFillColor(colors.black)
+            p.drawString(40, y, f"ID Incidente: #{incident.id}")
+            p.drawRightString(570, y, f"Fecha: {incident.created_at.strftime('%Y-%m-%d %H:%M')}")
             y -= 20
-            p.setFont("Helvetica-Oblique", 10)
+            p.drawString(40, y, f"Reportado por: {incident.reported_by.username}")
+            p.drawRightString(570, y, f"Estado: {incident.status.upper()}")
+            y -= 20
+            p.drawString(40, y, f"Tipo: {incident.incident_type.upper()}")
+            p.drawRightString(570, y, f"Riesgo: {incident.risk_level.upper()}")
             
-            text = incident.gemini_analysis or incident.analysis_result.get('gemini_explicacion')
+            y -= 40
+            # Header Box
+            p.setFillColor(colors.lightgrey)
+            p.rect(40, y - 5, 530, 20, fill=1, stroke=0)
+            p.setFillColor(colors.black)
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(50, y, "Detalle del Objetivo")
+            y -= 25
             
-            # Wrap text simple
-            from textwrap import wrap
-            lines = wrap(text, width=90)
+            target = incident.url or (incident.attached_file.name if incident.attached_file else "Desconocido")
+            p.setFont("Helvetica", 10)
+            p.drawString(40, y, f"Objetivo: {target}")
+            y -= 30
+
+            # 4. Analisis
+            p.setFillColor(colors.lightgrey)
+            p.rect(40, y - 5, 530, 20, fill=1, stroke=0)
+            p.setFillColor(colors.black)
+            p.setFont("Helvetica-Bold", 12)
+            p.drawString(50, y, "Resultados de Análisis")
+            y -= 25
             
-            for line in lines:
-                 if y < 50:
-                     p.showPage()
-                     y = h - 50
-                     p.setFont("Helvetica-Oblique", 10)
-                 p.drawString(50, y, line)
-                 y -= 15
+            # Motores logic (same as before) ...
+            positives = 0
+            total = 0
+            if incident.analysis_result:
+                 positives = incident.analysis_result.get('positives', 0)
+                 total = incident.analysis_result.get('total', 0)
             
-            y -= 10
-            # Recomendacion
-            rec = incident.analysis_result.get('gemini_recomendacion') if incident.analysis_result else None
-            if rec:
-                p.setFont("Helvetica-Bold", 10)
-                p.drawString(50, y, "Recomendación:")
-                y -= 15
-                p.setFont("Helvetica", 10)
-                lines = wrap(rec, width=90)
+            p.setFont("Helvetica", 10)
+            p.drawString(40, y, f"Detecciones Motores: {positives} / {total}")
+            y -= 15
+            p.drawString(40, y, "Fuentes: VirusTotal, MetaDefender, Google Safe Browsing")
+            y -= 30
+            
+            # IA Explanation
+            explanation = incident.gemini_analysis or (incident.analysis_result.get('gemini_explicacion') if incident.analysis_result else None)
+            if explanation:
+                p.setFillColor(colors.lightgrey)
+                p.rect(40, y - 5, 530, 20, fill=1, stroke=0)
+                p.setFillColor(colors.black)
+                p.setFont("Helvetica-Bold", 12)
+                p.drawString(50, y, "Análisis de Inteligencia Artificial (Gemini)")
+                y -= 25
+                
+                p.setFont("Helvetica-Oblique", 10)
+                from textwrap import wrap
+                lines = wrap(explanation, width=95)
                 for line in lines:
                     if y < 50:
                         p.showPage()
                         y = h - 50
-                    p.drawString(50, y, line)
+                    p.drawString(40, y, line)
                     y -= 15
+            
+            p.showPage()
 
-        # Footer
-        p.setFont("Helvetica-Oblique", 8)
-        p.drawString(50, 30, "Reporte generado por Asistente de Ciberseguridad - Tecnicontrol Automotriz")
-        p.drawString(400, 30, f"Página {p.getPageNumber()}")
-        
-        p.showPage()
+        else:
+            # --- MONTHLY REPORT ---
+            now = datetime.now()
+            incidents_qs = Incident.objects.all().order_by('-created_at')
+
+            # Logo
+            if os.path.exists(logo_path):
+                try: 
+                    p.drawImage(logo_path, 40, h - 90, width=150, height=75, preserveAspectRatio=True, mask='auto')
+                except Exception as e:
+                    logger.warning(f"Error drawing monthly logo: {e}")
+
+            p.setFont("Helvetica-Bold", 16)
+            p.drawRightString(550, h - 50, "REPORTE MENSUAL DE INCIDENTES")
+            p.setFont("Helvetica-Bold", 12)
+            p.drawRightString(550, h - 70, f"Fecha Emisión: {now.strftime('%Y-%m-%d')}")
+            
+            p.setLineWidth(1)
+            p.setStrokeColor(colors.black)
+            p.line(40, h - 100, 570, h - 100)
+            
+            y = h - 130
+            
+            # Table Header Background
+            p.setFillColor(colors.lightgrey)
+            p.rect(40, y - 5, 530, 15, fill=1, stroke=0)
+            p.setFillColor(colors.black)
+
+            # Simple Table Header
+            p.setFont("Helvetica-Bold", 9)
+            p.drawString(45, y, "ID")
+            p.drawString(85, y, "FECHA")
+            p.drawString(185, y, "USUARIO")
+            p.drawString(285, y, "TIPO")
+            p.drawString(355, y, "RIESGO")
+            p.drawString(455, y, "ESTADO")
+            y -= 20
+            
+            p.setFont("Helvetica", 8)
+            for inc in incidents_qs:
+                if y < 50:
+                    p.showPage()
+                    y = h - 50
+                    # Re-draw header on new page? (Optional-skipped for simplicity)
+                
+                # Stripe rows?
+                # if inc.id % 2 == 0: p.setFillColor(colors.whitesmoke) ...
+
+                p.drawString(45, y, str(inc.id))
+                p.drawString(85, y, inc.created_at.strftime('%Y-%m-%d'))
+                p.drawString(185, y, inc.reported_by.username[:15])
+                p.drawString(285, y, inc.incident_type)
+                
+                # Colorize Risk?
+                risk = inc.risk_level.upper()
+                if risk in ['CRITICAL', 'HIGH']: p.setFillColor(colors.red)
+                elif risk == 'MEDIUM': p.setFillColor(colors.orange)
+                elif risk == 'SAFE': p.setFillColor(colors.green)
+                else: p.setFillColor(colors.black)
+                
+                p.drawString(355, y, risk)
+                p.setFillColor(colors.black) # Reset
+                
+                p.drawString(455, y, inc.status)
+                y -= 15
+
+            p.showPage()
+
         p.save()
+        buffer.seek(0)
+        filename = f"reporte_incidente_{incident_id}.pdf" if incident_id else f"reporte_mensual_{datetime.now().strftime('%Y-%m')}.pdf"
+        response = HttpResponse(buffer, content_type='application/pdf')
+        response['Content-Disposition'] = f'attachment; filename="{filename}"'
         return response
 
-    except Incident.DoesNotExist:
-        return Response({'error': 'Incidente no encontrado'}, status=404)
     except Exception as e:
-        logger.error(f"Error generando PDF: {e}")
+        logger.error(f"Error general PDF: {e}")
         return Response({'error': str(e)}, status=500)

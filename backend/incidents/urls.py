@@ -12,4 +12,7 @@ urlpatterns = [
     path('<int:incident_id>/notes/', views.manage_incident_notes, name='manage_incident_notes'),
     path('<int:incident_id>/analysis-details/', views.get_incident_analysis_details, name='get_incident_analysis_details'),
     path('<int:incident_id>/pdf/', views.generate_pdf_report, name='generate_pdf_report'),
+    path('export/csv/', views.export_incidents_csv, name='export_incidents_csv'),
+    path('report/pdf/monthly/', views.generate_pdf_report, name='pdf_monthly'),
+    path('report/pdf/<int:incident_id>/', views.generate_pdf_report, name='pdf_incident'),
 ]

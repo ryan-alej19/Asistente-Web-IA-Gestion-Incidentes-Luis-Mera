@@ -133,9 +133,9 @@ const IncidentDetailModal = ({ incident, onClose, onUpdate }) => {
                         <div className="flex items-center gap-2">
                             <button
                                 onClick={handleDownloadReport}
-                                className="flex items-center gap-2 bg-primary/10 hover:bg-primary/20 text-primary border border-primary/20 px-4 py-2 rounded-lg transition-colors font-medium text-sm"
+                                className="flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white border border-red-500/20 px-4 py-2 rounded-lg transition-colors font-medium text-sm shadow-lg shadow-red-600/20"
                             >
-                                <Download className="w-4 h-4" />
+                                <FileText className="w-4 h-4" />
                                 Reporte PDF
                             </button>
                             <button onClick={onClose} className="text-gray-400 hover:text-white hover:bg-white/5 p-2 rounded-lg transition-colors">

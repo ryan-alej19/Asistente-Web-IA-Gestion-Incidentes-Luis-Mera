@@ -3,7 +3,7 @@ import axios from 'axios';
 import { motion } from 'framer-motion';
 import {
     LayoutDashboard, Shield, LogOut, Search, FileText, Link,
-    AlertTriangle, Filter, ChevronDown
+    AlertTriangle, Filter, ChevronDown, Download, FileSpreadsheet
 } from 'lucide-react';
 import StatisticsCards from '../components/analyst/StatisticsCards';
 import IncidentsTable from '../components/analyst/IncidentsTable';
@@ -74,6 +74,76 @@ const AnalystDashboard = () => {
     const handleLogout = () => {
         localStorage.clear();
         window.location.href = '/login';
+    };
+
+    const handleExportCSV = async () => {
+        try {
+            const token = localStorage.getItem('token');
+
+            // Construir query params
+            const params = new URLSearchParams();
+            if (filterType !== 'all') params.append('type', filterType);
+            if (filterRisk) params.append('risk_level', filterRisk);
+            // Search term not supported by backend export yet, but we can add if needed
+            // if (searchTerm) params.append('search', searchTerm);
+
+            const queryString = params.toString();
+            const url = `${API_URL}/api/incidents/export/csv/${queryString ? `?${queryString}` : ''}`;
+
+            const response = await fetch(url, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Token ${token}`, // Ensure Token prefix matches config
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al exportar CSV');
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = `incidentes_talleres_luis_mera_${new Date().toISOString().split('T')[0]}.csv`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(downloadUrl);
+        } catch (error) {
+            console.error('Error al exportar CSV:', error);
+            alert('Error al exportar datos CSV');
+        }
+    };
+
+    const handleExportPDFMonthly = async () => {
+        try {
+            const token = localStorage.getItem('token');
+
+            const response = await fetch(`${API_URL}/api/incidents/report/pdf/monthly/`, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Token ${token}`,
+                },
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al generar PDF');
+            }
+
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `reporte_mensual_${new Date().toISOString().split('T')[0]}.pdf`;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error al generar PDF:', error);
+            alert('Error al generar reporte PDF');
+        }
     };
 
     const username = localStorage.getItem('username') || 'Analista';
@@ -240,6 +310,25 @@ const AnalystDashboard = () => {
                                     </select>
                                     <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
                                 </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 p-2 px-4">
+                                <button
+                                    onClick={handleExportCSV}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm font-medium shadow-lg shadow-green-600/20"
+                                    title="Descargar CSV con filtros actuales"
+                                >
+                                    <FileSpreadsheet className="h-4 w-4" />
+                                    <span>CSV</span>
+                                </button>
+                                <button
+                                    onClick={handleExportPDFMonthly}
+                                    className="inline-flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium shadow-lg shadow-red-600/20"
+                                    title="Descargar Reporte Mensual PDF"
+                                >
+                                    <FileText className="h-4 w-4" />
+                                    <span>PDF Mensual</span>
+                                </button>
                             </div>
                         </div>
 
