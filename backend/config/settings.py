@@ -150,17 +150,16 @@ if _secret_key:
 _debug_env = _os.environ.get('DEBUG', 'False')
 DEBUG = _debug_env == 'True'
 
-    # Permitir todo en producción temporalmente para descartar errores de Host
-    ALLOWED_HOSTS = ['*']
+# Permitir todo en producción temporalmente para descartar errores de Host
+ALLOWED_HOSTS = ['*']
 
-    # CORS: dominios del frontend permitidos
-    _cors_origins = _os.environ.get('CORS_ALLOWED_ORIGINS', '')
-    if _cors_origins:
-        CORS_ALLOWED_ORIGINS = [
-            origin.strip() for origin in _cors_origins.split(',')
-        ]
-        # CSRF necesita scheme (https://)
-        CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
+# CORS: dominios del frontend permitidos
+_cors_origins = _os.environ.get('CORS_ALLOWED_ORIGINS', '')
+if _cors_origins:
+    CORS_ALLOWED_ORIGINS = [
+        origin.strip() for origin in _cors_origins.split(',')
+    ]
+    # CSRF necesita scheme (https://)
     CSRF_TRUSTED_ORIGINS = CORS_ALLOWED_ORIGINS
 
 # Base de datos: SQLite con ruta absoluta para Render
