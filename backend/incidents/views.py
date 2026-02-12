@@ -1245,3 +1245,7 @@ def generate_pdf_report(request, incident_id=None):
     except Exception as e:
         logger.error(f"Error general PDF: {e}")
         return Response({'error': str(e)}, status=500)
+
+from django.http import JsonResponse
+def health_check(request):
+    return JsonResponse({"status": "alive"}, status=200)
