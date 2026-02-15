@@ -13,12 +13,12 @@ class GeminiService:
         self.api_key = config('GEMINI_API_KEY', default='')
         
         if not self.api_key:
-            logger.warning("[GEMINI] API key no configurada")
+            logger.warning("Clave API de Gemini no configurada")
             self.available = False
         else:
             self.available = True
             if not GeminiService._initialized:
-                logger.info("[GEMINI] Servicio inicializado correctamente")
+                logger.info("Servicio de Inteligencia Artificial inicializado")
                 GeminiService._initialized = True
     
     def explain_threat(self, positives, total, incident_type, resource_name="Desconocido"):
@@ -83,7 +83,7 @@ Responde ÚNICAMENTE con el objeto JSON válido."""
             response = requests.post(url, json=payload, timeout=30)
             
             if response.status_code != 200:
-                logger.error(f"[GEMINI] API error: {response.status_code}")
+                logger.error(f"Error en API de Gemini: {response.status_code}")
                 return self._fallback_explanation(positives, total, incident_type)
             
             data = response.json()

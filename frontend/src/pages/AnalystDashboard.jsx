@@ -38,17 +38,17 @@ const AnalystDashboard = () => {
             const token = localStorage.getItem('token');
             const config = { headers: { Authorization: `Token ${token}` } };
 
-            // 1. Get Stats
+            // 1. Obtener Estadísticas
             const statsRes = await axios.get(`${API_URL}/api/incidents/stats/`, config);
             setStats(statsRes.data);
 
-            // 2. Get All Incidents
+            // 2. Obtener Lista de Incidentes
             const incidentsRes = await axios.get(`${API_URL}/api/incidents/list/`, config);
             setIncidents(incidentsRes.data.results);
 
             setError(null);
         } catch (err) {
-            console.error("Error fetching data:", err);
+            console.error("Error cargando datos:", err);
             setError("Error al cargar datos. Verifique permisos o conexión.");
         } finally {
             setLoading(false);
@@ -62,10 +62,10 @@ const AnalystDashboard = () => {
             !inc.risk_level?.toLowerCase().includes(searchTerm.toLowerCase()) &&
             !inc.id.toString().includes(searchTerm)) return false;
 
-        // Type
+        // Filtro por Tipo
         if (filterType !== 'all' && inc.incident_type !== filterType) return false;
 
-        // Risk
+        // Filtro por Riesgo
         if (filterRisk && inc.risk_level !== filterRisk) return false;
 
         return true;
@@ -80,7 +80,7 @@ const AnalystDashboard = () => {
         try {
             const token = localStorage.getItem('token');
 
-            // Construir query params
+            // Construir parámetros de la URL
             const params = new URLSearchParams();
             if (filterType !== 'all') params.append('type', filterType);
             if (filterRisk) params.append('risk_level', filterRisk);
@@ -303,10 +303,10 @@ const AnalystDashboard = () => {
                                         onChange={(e) => setFilterRisk(e.target.value)}
                                     >
                                         <option value="">Riesgo: Todos</option>
-                                        <option value="CRITICAL">🔴 Crítico</option>
-                                        <option value="HIGH">🟠 Alto</option>
-                                        <option value="MEDIUM">🟡 Medio</option>
-                                        <option value="LOW">🔵 Bajo</option>
+                                        <option value="CRITICAL">Crítico (Rojo)</option>
+                                        <option value="HIGH">Alto (Naranja)</option>
+                                        <option value="MEDIUM">Medio (Amarillo)</option>
+                                        <option value="LOW">Bajo (Azul)</option>
                                     </select>
                                     <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
                                 </div>

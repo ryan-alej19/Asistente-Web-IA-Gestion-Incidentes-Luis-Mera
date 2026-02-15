@@ -53,16 +53,16 @@ def is_encrypted_archive(file_obj):
                 
                 # Verificar si algún archivo está encriptado
                 for file_info in zip_ref.infolist():
-                    if file_info.flag_bits & 0x1:  # Bit 0 = encrypted
-                        logger.info(f"[ZIP] Archivo cifrado detectado: {file_info.filename}")
+                    if file_info.flag_bits & 0x1:  # Bit 0 = encriptado
+                        logger.info(f"Archivo cifrado detectado en ZIP: {file_info.filename}")
                         return True
                 
                 return False
         
-        # Para RAR, 7z: solo verificar por extensión (no tenemos librería)
+        # Para RAR, 7z: verificamos solo por extensión
         elif filename.endswith(('.rar', '.7z')):
-            # Heurística: archivos RAR/7z pequeños suelen ser cifrados
-            return True  # Conservador
+            # Asumimos que podrían estar cifrados por seguridad
+            return True
         
         return False
         
@@ -96,7 +96,7 @@ def analyze_file_preview(request):
         # VERIFICAR SI ES ZIP CIFRADO PRIMERO
         try:
             if is_encrypted_archive(file_obj):
-                logger.warning(f"[ZIP] Archivo cifrado detectado: {file_obj.name}")
+                logger.warning(f"Archivo cifrado detectado: {file_obj.name}")
                 
                 # RETORNAR INMEDIATAMENTE - NO CONTINUAR CON ANÁLISIS
                 return Response({
@@ -126,17 +126,18 @@ def analyze_file_preview(request):
         # Analisis Paralelo (Optimización)
         import concurrent.futures
         
-        # Failover wrappers para hilos
+        # Funciones seguras para escanear con cada antivirus
+        # Si uno falla, capturamos el error para que no detenga todo el proceso
         def safe_vt_scan(h):
             try: return vt_service.analyze_file_hash(h)
             except Exception as e:
-                logger.warning(f"[VT] Fallo: {e}")
+                logger.warning(f"Error en VirusTotal: {e}")
                 return {'error': str(e)}
                 
         def safe_md_scan(h):
             try: return md_service.analyze_file_hash(h)
             except Exception as e:
-                logger.warning(f"[MD] Fallo: {e}")
+                logger.warning(f"Error en MetaDefender: {e}")
                 return {'error': str(e)}
 
         with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
@@ -260,10 +261,10 @@ def analyze_url_preview(request):
         from django.core.cache import cache
         cached_result = cache.get(cache_key)
         if cached_result:
-            logger.info(f"[CACHE] Hit para URL: {url}")
+            logger.info(f"Resultado en caché encontrado para URL: {url}")
             return Response(cached_result)
             
-        logger.info(f"[CACHE] Miss - Analizando URL: {url}")
+        logger.info(f"Analizando URL nueva: {url}")
         
         # Servicios
         vt_service = VirusTotalService()
@@ -309,7 +310,7 @@ def analyze_url_preview(request):
 
         if not is_valid_structure:
             # Respuesta inmedita para input invalido
-            logger.warning(f"[VALIDATOR] Input rechazado: {url}")
+            logger.warning(f"URL inválida rechazada: {url}")
             return Response({
                 'risk_level': 'UNKNOWN',
                 'message': 'Entrada no válida',
@@ -336,7 +337,7 @@ def analyze_url_preview(request):
                 if pos > max_positives: max_positives = pos
                 total_scanned += tot
         except Exception as e:
-            logger.warning(f"[VT] Error: {e}")
+            logger.warning(f"Error en VirusTotal: {e}")
             
         # 2. MetaDefender
         try:
@@ -354,7 +355,7 @@ def analyze_url_preview(request):
                 if pos > max_positives: max_positives = max(max_positives, pos)
                 total_scanned += tot
         except Exception as e:
-            logger.warning(f"[MD] Error: {e}")
+            logger.warning(f"Error en MetaDefender: {e}")
 
         # 3. Google Safe Browsing
         try:
@@ -373,7 +374,7 @@ def analyze_url_preview(request):
                 max_positives = max(max_positives, 1)
                 
         except Exception as e:
-            logger.warning(f"[GSB] Error: {e}")
+            logger.warning(f"Error en Google Safe Browsing: {e}")
             
         # 4. Clasificador Heurístico
         try:
@@ -394,7 +395,7 @@ def analyze_url_preview(request):
                     'link': '#'
                 })
         except Exception as e:
-            logger.warning(f"[HEUR] Error: {e}")
+            logger.warning(f"Error en Heurística: {e}")
 
         
         if not engines_list:
@@ -412,7 +413,7 @@ def analyze_url_preview(request):
             message = 'URL segura'
             
         # Gemini (SIEMPRE)
-        logger.info("[GEMINI] Iniciando analisis URL...")
+        logger.info("Iniciando análisis inteligente con Gemini...")
         try:
             gemini_result = gemini_service.explain_threat(max_positives, 90, 'url', url)
         except:
@@ -444,11 +445,8 @@ def create_incident(request):
     try:
         incident_type = request.data.get('incident_type')
         
-        # Recuperar datos de analisis previos si vienen en el request
-        # El frontend podria enviarlos o podriamos re-calcularlos.
-        # Para eficiencia en esta tesis, si el frontend ya tiene el resultado (preview),
-        # lo ideal seria enviarlo.
-        
+        # Recuperar datos de analisis previos si vienen en la petición
+        # Esto evita tener que analizar de nuevo si ya se hizo en la vista previa
         analysis_result_data = request.data.get('analysis_result')
         
         # LOGGING DEBUG
@@ -464,7 +462,7 @@ def create_incident(request):
             try:
                 analysis_result_data = json.loads(analysis_result_data)
             except Exception as e:
-                logger.error(f"Error parsing analysis_result JSON: {e}")
+                logger.error(f"Error procesando resultado JSON: {e}")
                 analysis_result_data = {}
 
         incident = Incident.objects.create(
@@ -481,7 +479,7 @@ def create_incident(request):
         
         # Tambien poblamos los campos legacy por compatibilidad si es posible
         if analysis_result_data:
-             # Intentar poblar campos legacy (opcional, pero util para depuracion y fallback)
+             # Guardamos datos para compatibilidad con versiones anteriores del sistema
              try:
                  # Extract engines to map to legacy fields
                  engines = analysis_result_data.get('engines', [])
@@ -505,7 +503,7 @@ def create_incident(request):
                          incident.gemini_analysis += f"\n\nRecomendación: {gemini_rec}"
                          
              except Exception as e:
-                 logger.error(f"Error populating legacy fields: {e}")
+                 logger.error(f"Error guardando datos de compatibilidad: {e}")
 
         incident.save()
         
@@ -521,8 +519,7 @@ from rest_framework.pagination import PageNumberPagination
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def list_incidents(request):
-    # Lista incidentes con filtros y paginacion
-    # Se puede filtrar por riesgo, estado y fechas
+    # Lista incidentes permitiendo filtrar por diversos criterios
     try:
         user_role = getattr(request.user, 'profile', None) and request.user.profile.role or 'employee'
         

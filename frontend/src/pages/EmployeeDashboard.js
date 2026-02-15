@@ -10,41 +10,42 @@ import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import API_URL from '../config/api';
 
 const EmployeeDashboard = () => {
-  const [analysisType, setAnalysisType] = useState('url'); // url | file
+  // Guardamos si el usuario elige analizar URL o Archivo
+  const [analysisType, setAnalysisType] = useState('url');
   const [url, setUrl] = useState('');
   const [attachedFile, setAttachedFile] = useState(null);
   const [description, setDescription] = useState('');
   const [urlTimeout, setUrlTimeout] = useState(null);
 
-  // Estado para el analisis
+  // Estados para controlar la carga y el resultado del análisis
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  // Typewriter effect state
+  // Estado para el efecto de "escribiendo" en la explicación de la IA
   const [typwriterText, setTypewriterText] = useState('');
 
-  // Funcion para cerrar sesion
+  // Función para salir del sistema (Cerrar Sesión)
   const handleLogout = () => {
-    localStorage.clear();
-    window.location.href = '/login';
+    localStorage.clear(); // Borra el token guardado
+    window.location.href = '/login'; // Redirige al login
   };
 
-  // Funcion cuando se selecciona un archivo
+  // Función que se activa al elegir un archivo del computador
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
       setAttachedFile(file);
-      setAnalysisResult(null);
+      setAnalysisResult(null); // Resetea resultados anteriores
     }
   };
 
-  // Funcion cuando se escribe una URL
+  // Función que se activa al escribir en la caja de URL
   const handleUrlChange = (e) => {
     const newUrl = e.target.value;
     setUrl(newUrl);
 
-    // Si la URL parece valida, analizamos despues de un segundo
+    // Si parece una URL válida (tiene un punto), esperamos un segundo y analizamos automáticamente
     if (newUrl && newUrl.includes('.')) {
       if (urlTimeout) clearTimeout(urlTimeout);
       const timeout = setTimeout(() => {

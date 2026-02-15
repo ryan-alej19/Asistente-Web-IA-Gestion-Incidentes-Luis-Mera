@@ -17,7 +17,7 @@ class MetaDefenderService:
     def analyze_file(self, file_obj):
         # Manda el archivo a MetaDefender y devuelve resultados
         if not self.api_key:
-            logger.error("[MD] Falta la clave de API")
+            logger.error("Clave API de MetaDefender no configurada")
             return {'error': 'Falta la clave de API'}
         
         try:
@@ -30,7 +30,7 @@ class MetaDefenderService:
             
             file_hash = sha256_hash.hexdigest()
             
-            logger.info(f"[MD] Hash: {file_hash}")
+            logger.info(f"Hash calculado: {file_hash}")
             
             # Buscar por hash
             lookup_url = f"{self.base_url}/hash/{file_hash}"
@@ -46,7 +46,9 @@ class MetaDefenderService:
                 total_detected = scan_results.get('total_detected_avs', 0)
                 total_avs = scan_results.get('total_avs', 0)
                 
-                logger.info(f"[MD] Resultado existente: {total_detected}/{total_avs}")
+                total_avs = scan_results.get('total_avs', 0)
+                
+                logger.info(f"Resultado existente en MetaDefender: {total_detected}/{total_avs}")
                 
                 return {
                     'positives': total_detected,
@@ -69,11 +71,11 @@ class MetaDefenderService:
             
             data_id = upload_data.get('data_id')
             
-            logger.info(f"[MD] Archivo subido, data_id: {data_id}")
+            logger.info(f"Archivo subido a MetaDefender, ID: {data_id}")
             
             # Esperar análisis (máximo 60 segundos)
             for attempt in range(12):
-                logger.info(f"[MD] Intento {attempt + 1}/12")
+                logger.info(f"Esperando MetaDefender... Intento {attempt + 1}/12")
                 time.sleep(5)
                 
                 result_url = f"{self.base_url}/file/{data_id}"
@@ -89,7 +91,9 @@ class MetaDefenderService:
                         total_detected = scan_results.get('total_detected_avs', 0)
                         total_avs = scan_results.get('total_avs', 0)
                         
-                        logger.info(f"[MD] Análisis completo: {total_detected}/{total_avs}")
+                        total_avs = scan_results.get('total_avs', 0)
+                        
+                        logger.info(f"Análisis de MetaDefender completo: {total_detected}/{total_avs}")
                         
                         return {
                             'positives': total_detected,
@@ -98,11 +102,11 @@ class MetaDefenderService:
                             'link': f"https://metadefender.opswat.com/results/file/{data_id}/regular/overview"
                         }
             
-            logger.warning("[MD] Timeout esperando análisis")
+            logger.warning("Tiempo de espera agotado para MetaDefender")
             return {'error': 'Timeout'}
             
         except Exception as e:
-            logger.error(f"[MD] Error: {e}")
+            logger.error(f"Error en MetaDefender: {e}")
             return {'error': str(e)}
 
     def analyze_file_hash(self, file_hash):

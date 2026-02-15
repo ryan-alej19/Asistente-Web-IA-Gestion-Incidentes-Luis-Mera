@@ -49,6 +49,8 @@ const AdminDashboard = () => {
         try {
             const token = localStorage.getItem('token');
             const config = { headers: { Authorization: `Token ${token}` } };
+
+            // Cargar estadísticas y usuarios en paralelo
             const [statsRes, usersRes] = await Promise.all([
                 axios.get(`${API_URL}/api/incidents/stats/`, config),
                 axios.get(`${API_URL}/api/users/list/`, config)
@@ -56,7 +58,7 @@ const AdminDashboard = () => {
             setStats(statsRes.data);
             setUsers(usersRes.data);
         } catch (err) {
-            console.error("Error fetching admin stats/users:", err);
+            console.error("Error cargando estadísticas y usuarios:", err);
         }
     };
 
@@ -291,10 +293,10 @@ const AdminDashboard = () => {
                                             onChange={(e) => setFilterRisk(e.target.value)}
                                         >
                                             <option value="">Riesgo: Todos</option>
-                                            <option value="CRITICAL">🔴 Crítico</option>
-                                            <option value="HIGH">🟠 Alto</option>
-                                            <option value="MEDIUM">🟡 Medio</option>
-                                            <option value="LOW">🔵 Bajo</option>
+                                            <option value="CRITICAL">Crítico (Rojo)</option>
+                                            <option value="HIGH">Alto (Naranja)</option>
+                                            <option value="MEDIUM">Medio (Amarillo)</option>
+                                            <option value="LOW">Bajo (Azul)</option>
                                         </select>
                                         <ChevronDown className="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" />
                                     </div>
