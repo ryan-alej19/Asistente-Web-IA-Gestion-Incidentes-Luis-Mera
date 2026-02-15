@@ -357,7 +357,7 @@ const EmployeeDashboard = () => {
                   className="w-full bg-success text-white font-bold py-4 rounded-xl shadow-lg shadow-success/20 hover:bg-green-600 transition-all flex items-center justify-center gap-2"
                 >
                   {submitting ? <Loader2 className="animate-spin" /> : <Shield className="w-5 h-5" />}
-                  {submitting ? 'Enviando...' : 'Confirmar y Reportar al SOC'}
+                  {submitting ? 'Enviando...' : 'Generar Incidente'}
                 </button>
               </motion.div>
             )}
