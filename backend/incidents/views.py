@@ -179,16 +179,16 @@ def analyze_file_preview(request):
             
         # 3. Heurístico
         # 3. Heurístico
-        engines.append({
-            'name': 'Clasificador Heurístico',
-            'detected': heuristic_result['heuristic_alert'],
-            'status_text': f"Patrones detectados: {', '.join(heuristic_result['detected_patterns'])}" if heuristic_result['heuristic_alert'] else "Análisis estático limpio",
-            'link': '#'
-        })
-        
-        total_engines += 1 # Siempre cuenta como un motor
         if heuristic_result['heuristic_alert']:
-            total_positives += 1
+            engines.append({
+                'name': 'Clasificador Heurístico',
+                'detected': True,
+                'status_text': f"Patrones detectados: {', '.join(heuristic_result['detected_patterns'])}",
+                'link': '#'
+            })
+            # Penalización heurística
+            total_positives += 1 # Cuenta como 1 motor positivo
+            total_engines += 1
         
         # Determinar riesgo
         if total_engines == 0:
