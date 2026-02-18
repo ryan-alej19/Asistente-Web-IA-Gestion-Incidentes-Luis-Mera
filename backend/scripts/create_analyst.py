@@ -1,4 +1,8 @@
 import os
+import sys
+# Add backend root to path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 import django
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
@@ -29,7 +33,7 @@ def create_analyst():
         user.profile.role = 'analyst'
         user.profile.save()
         
-    print(f"✅ Usuario '{username}' listo con rol de Analista.")
+    print(f" Usuario '{username}' listo con rol de Analista.")
 
 if __name__ == '__main__':
     create_analyst()

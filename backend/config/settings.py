@@ -81,9 +81,26 @@ DATABASES = {
     }
 }
 
+# Cache Persistente (Archivos) para ahorrar APIs entre reinicios
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': BASE_DIR / 'django_cache',
+        'TIMEOUT': 86400, # 24 Horas
+        'OPTIONS': {
+            'MAX_ENTRIES': 1000
+        }
+    }
+}
+
 LANGUAGE_CODE = 'es-ec'
 TIME_ZONE = 'America/Guayaquil'
 USE_TZ = True
+
+
+# Limites de subida de archivos (10MB)
+DATA_UPLOAD_MAX_MEMORY_SIZE = 10485760
+FILE_UPLOAD_MAX_MEMORY_SIZE = 10485760
 
 STATIC_URL = 'static/'
 

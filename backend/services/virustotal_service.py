@@ -95,19 +95,25 @@ class VirusTotalService:
              logger.error(f"Error analizando hash VT: {e}")
              return {'error': str(e)}
     
-    def analyze_file(self, file_obj):
+    def analyze_file(self, file_obj, known_hash=None):
         # Analiza un archivo
         # Primero reviso si ya existe por su hash, sino lo subo
         if not self.api_key:
             return {'error': 'Falta la clave de API'}
         
         try:
-            # Calcular hash SHA-256
-            file_obj.seek(0)
-            sha256_hash = hashlib.sha256()
-            for chunk in file_obj.chunks():
-                sha256_hash.update(chunk)
-            file_hash = sha256_hash.hexdigest()
+            # Calcular hash SHA-256 si no se provee
+            if known_hash:
+                file_hash = known_hash
+            else:
+                file_obj.seek(0)
+                sha256_hash = hashlib.sha256()
+                if hasattr(file_obj, 'chunks'):
+                    for chunk in file_obj.chunks():
+                        sha256_hash.update(chunk)
+                else:
+                    sha256_hash.update(file_obj.read())
+                file_hash = sha256_hash.hexdigest()
             
             logger.info(f"Analizando archivo con hash: {file_hash}")
             

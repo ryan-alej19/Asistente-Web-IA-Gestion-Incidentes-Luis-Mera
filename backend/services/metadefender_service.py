@@ -14,7 +14,7 @@ class MetaDefenderService:
         self.api_key = config('METADEFENDER_API_KEY', default='')
         self.base_url = 'https://api.metadefender.com/v4'
     
-    def analyze_file(self, file_obj):
+    def analyze_file(self, file_obj, known_hash=None):
         # Manda el archivo a MetaDefender y devuelve resultados
         if not self.api_key:
             logger.error("Clave API de MetaDefender no configurada")
@@ -22,13 +22,19 @@ class MetaDefenderService:
         
         try:
             # Calcular hash SHA-256
-            sha256_hash = hashlib.sha256()
-            file_obj.seek(0)
-            
-            for chunk in file_obj.chunks():
-                sha256_hash.update(chunk)
-            
-            file_hash = sha256_hash.hexdigest()
+            if known_hash:
+                file_hash = known_hash
+            else:
+                sha256_hash = hashlib.sha256()
+                file_obj.seek(0)
+                
+                if hasattr(file_obj, 'chunks'):
+                    for chunk in file_obj.chunks():
+                        sha256_hash.update(chunk)
+                else:
+                    sha256_hash.update(file_obj.read())
+                
+                file_hash = sha256_hash.hexdigest()
             
             logger.info(f"Hash calculado: {file_hash}")
             

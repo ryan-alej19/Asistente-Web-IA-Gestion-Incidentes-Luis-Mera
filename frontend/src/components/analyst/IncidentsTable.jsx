@@ -38,15 +38,11 @@ const IncidentsTable = ({ incidents, onView, onChangeState }) => {
                     </tr>
                 </thead>
                 <motion.tbody
-                    variants={container}
-                    initial="hidden"
-                    animate="show"
                     className="divide-y divide-border"
                 >
                     {incidents.map((incident) => (
                         <motion.tr
                             key={incident.id}
-                            variants={item}
                             className="hover:bg-white/5 transition-colors group"
                         >
                             <td className="px-6 py-4 text-gray-500 font-mono text-sm">#{incident.id}</td>
@@ -101,12 +97,12 @@ const IncidentsTable = ({ incidents, onView, onChangeState }) => {
                             <td className="px-6 py-4">
                                 <div className="flex items-center gap-2">
                                     <span className={`w-2 h-2 rounded-full ${incident.status === 'pending' ? 'bg-gray-500 animate-pulse' :
-                                            incident.status === 'investigating' ? 'bg-yellow-500 animate-pulse' :
-                                                'bg-green-500'
+                                        incident.status === 'investigating' ? 'bg-yellow-500 animate-pulse' :
+                                            'bg-green-500'
                                         }`}></span>
                                     <span className={`text-xs font-medium ${incident.status === 'pending' ? 'text-gray-400' :
-                                            incident.status === 'investigating' ? 'text-yellow-400' :
-                                                'text-green-400'
+                                        incident.status === 'investigating' ? 'text-yellow-400' :
+                                            'text-green-400'
                                         }`}>
                                         {incident.status === 'pending' && 'Pendiente'}
                                         {incident.status === 'investigating' && 'Revisión'}

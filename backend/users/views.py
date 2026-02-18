@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
-from django.contrib.auth.models import User
+from django.contrib.auth.models import User, update_last_login
 from django.shortcuts import get_object_or_404
 from .models import UserProfile
 from .serializers import UserSerializer
@@ -15,6 +15,9 @@ class CustomAuthToken(ObtainAuthToken):
         serializer.is_valid(raise_exception=True)
         user = serializer.validated_data['user']
         token, created = Token.objects.get_or_create(user=user)
+        
+        # Update last_login
+        update_last_login(None, user)
         
         role = 'employee'
         if hasattr(user, 'profile'):

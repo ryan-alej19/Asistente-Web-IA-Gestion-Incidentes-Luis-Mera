@@ -37,13 +37,13 @@ const AdminDashboard = () => {
         fetchStatsAndUsers();
     }, []);
 
-    // Debounce Search & Fetch Incidents
+    // Initial Fetch
     useEffect(() => {
-        const timer = setTimeout(() => {
-            fetchIncidents();
-        }, 500);
-        return () => clearTimeout(timer);
-    }, [filterType, filterRisk, searchTerm]);
+        fetchIncidents();
+    }, []); // Run once on mount
+
+    // Debounce Search - ONLY for Search if we wanted server side, but we are client side now.
+    // So we don't need this effect for filtering anymore.
 
     const fetchStatsAndUsers = async () => {
         try {
@@ -68,12 +68,8 @@ const AdminDashboard = () => {
         try {
             const token = localStorage.getItem('token');
             const config = {
-                headers: { Authorization: `Token ${token}` },
-                params: {
-                    incident_type: filterType !== 'all' ? filterType : undefined,
-                    risk_level: filterRisk || undefined,
-                    search: searchTerm || undefined
-                }
+                headers: { Authorization: `Token ${token}` }
+                // Removed server-side params to use client-side filtering (Consistent with Analyst)
             };
 
             const response = await axios.get(`${API_URL}/api/incidents/list/`, config);
@@ -86,6 +82,42 @@ const AdminDashboard = () => {
             setLoading(false);
         }
     };
+
+    // Filter Logic (Client Side)
+    const filteredIncidents = incidents.filter(inc => {
+        // Search
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            const matchesId = inc.id.toString().includes(term);
+            const matchesDesc = inc.description?.toLowerCase().includes(term);
+            const matchesRisk = inc.risk_level?.toLowerCase().includes(term);
+            const matchesType = inc.incident_type?.toLowerCase().includes(term);
+            const matchesUrl = inc.url?.toLowerCase().includes(term);
+            const matchesFile = inc.attached_file?.toLowerCase().includes(term);
+
+            if (!matchesId && !matchesDesc && !matchesRisk && !matchesType && !matchesUrl && !matchesFile) {
+                return false;
+            }
+        }
+
+        // Filter by Type
+        if (filterType !== 'all') {
+            const type = inc.incident_type?.toLowerCase() || '';
+            if (type !== filterType.toLowerCase()) return false;
+        }
+
+        // Filter by Risk
+        if (filterRisk && inc.risk_level !== filterRisk) return false;
+
+        return true;
+    });
+
+    console.log("AdminDashboard Render:", {
+        total: incidents.length,
+        filtered: filteredIncidents.length,
+        filterType,
+        filterRisk
+    });
 
     // Reload all data (e.g. after update)
     const reloadAll = () => {
@@ -304,7 +336,7 @@ const AdminDashboard = () => {
                             </div>
 
                             <IncidentsTable
-                                incidents={incidents}
+                                incidents={filteredIncidents}
                                 onView={(incident) => { setSelectedIncident(incident); setShowDetailModal(true); }}
                                 onChangeState={(incident) => { setIncidentToChange(incident); setShowChangeStateModal(true); }}
                             />

@@ -13,9 +13,9 @@ def create_user_if_missing(username, password, role):
         u.role = role
         u.is_active = True
         u.save()
-        print(f"✅ Created {role}: {username}")
+        print(f" Created {role}: {username}")
     else:
-        print(f"ℹ️ User already exists: {username}")
+        print(f"ℹ User already exists: {username}")
 
 print("--- ADJUSTING USERS TO TARGET: 5 TOTAL (1 Admin, 1 Analista, 3 Empleados) ---")
 

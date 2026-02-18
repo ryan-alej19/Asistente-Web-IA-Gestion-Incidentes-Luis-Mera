@@ -29,27 +29,39 @@ const AnalystDashboard = () => {
     const [showChangeStateModal, setShowChangeStateModal] = useState(false);
 
     useEffect(() => {
+        fetchStats();
         fetchDashboardData();
-    }, []);
+        const interval = setInterval(fetchStats, 30000);
+        return () => clearInterval(interval);
+    }, []); // Run once on mount
+
+    const fetchStats = async () => {
+        try {
+            const token = localStorage.getItem('token');
+            const config = { headers: { Authorization: `Token ${token}` } };
+            const response = await axios.get(`${API_URL}/api/incidents/stats/`, config);
+            setStats(response.data);
+        } catch (err) {
+            console.error("Error fetching stats:", err);
+        }
+    };
 
     const fetchDashboardData = async () => {
         setLoading(true);
         try {
             const token = localStorage.getItem('token');
-            const config = { headers: { Authorization: `Token ${token}` } };
-
-            // 1. Obtener Estadísticas
-            const statsRes = await axios.get(`${API_URL}/api/incidents/stats/`, config);
-            setStats(statsRes.data);
+            const config = {
+                headers: { Authorization: `Token ${token}` }
+                // Removed server-side params to use client-side filtering
+            };
 
             // 2. Obtener Lista de Incidentes
             const incidentsRes = await axios.get(`${API_URL}/api/incidents/list/`, config);
             setIncidents(incidentsRes.data.results);
 
-            setError(null);
         } catch (err) {
-            console.error("Error cargando datos:", err);
-            setError("Error al cargar datos. Verifique permisos o conexión.");
+            console.error("Error fetching dashboard data:", err);
+            setError("Error al cargar datos.");
         } finally {
             setLoading(false);
         }
@@ -58,18 +70,33 @@ const AnalystDashboard = () => {
     // Filter Logic
     const filteredIncidents = incidents.filter(inc => {
         // Search
-        if (searchTerm && !inc.description?.toLowerCase().includes(searchTerm.toLowerCase()) &&
-            !inc.risk_level?.toLowerCase().includes(searchTerm.toLowerCase()) &&
-            !inc.id.toString().includes(searchTerm)) return false;
+        // Search
+        if (searchTerm) {
+            const term = searchTerm.toLowerCase();
+            const matchesId = inc.id.toString().includes(term);
+            const matchesDesc = inc.description?.toLowerCase().includes(term);
+            const matchesRisk = inc.risk_level?.toLowerCase().includes(term);
+            const matchesType = inc.incident_type?.toLowerCase().includes(term);
+            const matchesUrl = inc.url?.toLowerCase().includes(term);
+            const matchesFile = inc.attached_file ? inc.attached_file.toString().toLowerCase().includes(term) : false;
+
+            if (!matchesId && !matchesDesc && !matchesRisk && !matchesType && !matchesUrl && !matchesFile) {
+                return false;
+            }
+        }
 
         // Filtro por Tipo
-        if (filterType !== 'all' && inc.incident_type !== filterType) return false;
+        if (filterType !== 'all') {
+            const type = inc.incident_type?.toLowerCase() || '';
+            if (type !== filterType.toLowerCase()) return false;
+        }
 
         // Filtro por Riesgo
         if (filterRisk && inc.risk_level !== filterRisk) return false;
 
         return true;
     });
+
 
     const handleLogout = () => {
         localStorage.clear();

@@ -1,12 +1,21 @@
+
 import os
+import sys
 import django
+
+# Agregar directorio raíz al path para encontrar 'config'
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 django.setup()
 
-from incidents.models import Incident
+from incidents.models import Incident, IncidentNote
 
-count = Incident.objects.count()
-Incident.objects.all().delete()
+def reset_db():
+    print("--- BORRANDO TODOS LOS INCIDENTES ---")
+    deleted_incidents = Incident.objects.all().delete()
+    print(f"Eliminados: {deleted_incidents}")
+    print("Base de datos limpia. Lista recibir nuevos casos.")
 
-print(f"✅ Cleared {count} incidents. Database is now empty of reports.")
+if __name__ == '__main__':
+    reset_db()

@@ -18,8 +18,10 @@ class UserSerializer(serializers.ModelSerializer):
 
     def get_last_login_formatted(self, obj):
         if obj.last_login:
-            return obj.last_login.strftime('%Y-%m-%d %H:%M')
+            from django.utils import timezone
+            return timezone.localtime(obj.last_login).strftime('%Y-%m-%d %H:%M')
         return 'Nunca'
 
     def get_date_joined_formatted(self, obj):
-        return obj.date_joined.strftime('%Y-%m-%d')
+        from django.utils import timezone
+        return timezone.localtime(obj.date_joined).strftime('%Y-%m-%d')

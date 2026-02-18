@@ -11,13 +11,13 @@ PASSWORD = "empleado123"
 
 def debug_file():
     # 1. Login
-    print("🔑 Authenticating...")
+    print(" Authenticating...")
     token_resp = requests.post(AUTH_URL, json={"username": USERNAME, "password": PASSWORD})
     if token_resp.status_code != 200:
         print(f"Login failed: {token_resp.text}")
         return
     token = token_resp.json().get('token')
-    print("✅ Authenticated")
+    print(" Authenticated")
 
     # 2. Upload File
     headers = {"Authorization": f"Token {token}"}
@@ -25,7 +25,7 @@ def debug_file():
     with open(filename, "w") as f:
         f.write("This is a test file content.")
         
-    print(f"📤 Uploading {filename}...")
+    print(f" Uploading {filename}...")
     try:
         with open(filename, 'rb') as f:
             files = {'file': (filename, f)}
@@ -37,7 +37,7 @@ def debug_file():
         print(f"Response Content: {resp.text}")
         
     except Exception as e:
-        print(f"❌ Exception: {e}")
+        print(f" Exception: {e}")
 
 if __name__ == "__main__":
     debug_file()
