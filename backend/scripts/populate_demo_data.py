@@ -16,14 +16,13 @@ from django.contrib.auth.models import User
 from users.models import UserProfile
 
 def populate():
-    print("--- PREPARANDO SISTEMA PARA DEMO (DATOS REALISTAS) ---")
+    print("--- PREPARANDO SISTEMA PARA DEMO TESIS (24 INCIDENTES - FIXED) ---")
     
-    # 1. Limpiar (Opcional, para demo siempre limpio es mejor)
+    # 1. Limpiar 
     print("Limpiando base de datos...")
     Incident.objects.all().delete()
     
-    # 2. Usuarios
-    print("Verificando usuarios...")
+    # 2. Usuarios 
     users_data = [
         {'username': 'empleado', 'email': 'empleado@tecnicontrol.com', 'role': 'employee', 'password': 'empleado123'},
         {'username': 'analista', 'email': 'analista@tecnicontrol.com', 'role': 'analyst', 'password': 'analista123'},
@@ -36,132 +35,96 @@ def populate():
         if created:
             user.set_password(u_data['password'])
             user.save()
-            print(f"Usuario creado: {u_data['username']}")
         
-        # Profile
-        UserProfile.objects.get_or_create(user=user, defaults={'role': u_data['role']})
+        profile, _ = UserProfile.objects.get_or_create(user=user)
+        profile.role = u_data['role']
+        profile.save()
         users_objs[u_data['username']] = user
 
-    # 3. Incidentes (15-20)
-    print("Generando incidentes de prueba...")
-    
-    incident_templates = [
-        {
-            'title': 'Correo Sospechoso de Banco',
-            'desc': 'Recibí un correo pidiendo actualizar mis datos bancarios. El link es extraño.',
-            'type': 'phishing',
-            'risk': 'high',
-            'status': 'investigating',
-            'target': 'http://bancopichincha-seguro-login.xyz',
-            'vt_score': {'positives': 15, 'total': 90},
-            'gemini': 'Alta probabilidad de Phishing. El dominio .xyz es común en estafas.'
-        },
-        {
-            'title': 'Factura.pdf.exe',
-            'desc': 'Un archivo adjunto que parece una factura pero tiene doble extensión.',
-            'type': 'malware',
-            'risk': 'critical',
-            'status': 'closed',
-            'target': 'Factura_Pendiente_2024.pdf.exe',
-            'vt_score': {'positives': 45, 'total': 90},
-            'gemini': 'Malware confirmado. Archivo ejecutable camuflado como PDF (Double Extension).'
-        },
-        {
-            'title': 'Página de Login Corporativo',
-            'desc': 'La página interna de RRHH carga lento y pide login de nuevo.',
-            'type': 'url',
-            'risk': 'safe',
-            'status': 'analyzed',
-            'target': 'https://rrhh.tecnicontrol.com/login',
-            'vt_score': {'positives': 0, 'total': 90},
-            'gemini': 'Sitio legítimo. La lentitud puede deberse a problemas de red interna.'
-        },
-        {
-            'title': 'Alerta de Antivirus en PC Ventas',
-            'desc': 'El antivirus saltó al conectar un USB de un cliente.',
-            'type': 'ransomware',
-            'risk': 'high',
-            'status': 'investigating',
-            'target': 'USB_Drive_G:/Autorun.inf',
-            'vt_score': {'positives': 22, 'total': 90},
-            'gemini': 'Posible vector de infección por USB (Worm/Ransomware).'
-        },
-        {
-            'title': 'Enlace de Zoom desconocido',
-            'desc': 'Invitación a reunión de Zoom de un remitente externo.',
-            'type': 'phishing',
-            'risk': 'medium',
-            'status': 'analyzed',
-            'target': 'https://zoom-meetings-secure.net/join',
-            'vt_score': {'positives': 4, 'total': 90},
-            'gemini': 'Dominio sospechoso (Cybersquatting). No es el dominio oficial de Zoom.'
-        },
-         {
-            'title': 'Archivo Excel con Macros',
-            'desc': 'Contabilidad reporta un Excel que pide habilitar macros para ver el contenido.',
-            'type': 'malware',
-            'risk': 'critical',
-            'status': 'pending',
-            'target': 'Balance_General_2025.xlsm',
-            'vt_score': {'positives': 35, 'total': 88},
-            'gemini': 'Documento malicioso. Contiene macros VBA ofuscadas que intentan descargar payload.'
-        },
-         {
-            'title': 'Publicidad Invasiva',
-            'desc': 'Al navegar en sitio de proveedores salen popups raros.',
-            'type': 'others',
-            'risk': 'low',
-            'status': 'closed',
-            'target': 'http://ad-server-tracker.com',
-            'vt_score': {'positives': 1, 'total': 90},
-            'gemini': 'Adware / Potentially Unwanted Program (PUP).'
-        },
-        {
-            'title': 'Actualización de Drivers',
-            'desc': 'Pagina para descargar drivers de impresora.',
-            'type': 'url',
-            'risk': 'safe',
-            'status': 'analyzed',
-            'target': 'https://hp.com/support/drivers',
-            'vt_score': {'positives': 0, 'total': 90},
-            'gemini': 'Sitio oficial de HP. Seguro.'
-        }
-    ]
-    
-    # Generar 16 incidentes mezclando templates
-    count = 0
-    for i in range(16):
-        template = incident_templates[i % len(incident_templates)]
+    # helper for gemini text
+    def get_gemini_text(risk, type_):
+        if risk == 'CRITICAL': return "ALERTA CRÍTICA: Amenaza confirmada con alta confianza. Se detectan patrones maliciosos conocidos."
+        if risk == 'HIGH': return "ALERTA: Alta probabilidad de amenaza. Múltiples motores detectan actividad sospechosa."
+        if risk == 'MEDIUM': return "PRECAUCIÓN: Elementos sospechosos detectados. Se recomienda revisión manual."
+        if risk == 'LOW': return "BAJO RIESGO: Pocos indicadores de compromiso, probablemente falso positivo o adware."
+        return "SEGURO: No se encontraron amenazas en el análisis."
+
+    # NOTE: Matched keys to models.py
+    # risk: LOW, MEDIUM, HIGH, CRITICAL
+    # status: pending, investigating, resolved
+    # type: url, file (mapped from context)
+
+    incidents_list = [
+        # --- A. URLs PELIGROSAS (10) ---
+        { 'title': 'URL Malware Google Test', 'desc': 'URL sospechosa recibida por correo (Malware)', 'target': 'http://malware.testing.google.test/testing/malware/', 'type': 'url', 'risk': 'CRITICAL', 'status': 'resolved', 'vt': {'positives': 15, 'total': 90} },
+        { 'title': 'Phishing Test Page', 'desc': 'Enlace de correo bancario sospechoso (Phishing)', 'target': 'http://testsafebrowsing.appspot.com/s/phishing.html', 'type': 'url', 'risk': 'CRITICAL', 'status': 'investigating', 'vt': {'positives': 12, 'total': 90} },
+        { 'title': 'Malware Download Test', 'desc': 'Descarga automática desde enlace desconocido', 'target': 'http://testsafebrowsing.appspot.com/s/malware.html', 'type': 'url', 'risk': 'CRITICAL', 'status': 'resolved', 'vt': {'positives': 20, 'total': 90} },
+        { 'title': 'EICAR Web Download', 'desc': 'Archivo de prueba EICAR desde sitio web', 'target': 'http://eicar.org/download/eicar.com', 'type': 'url', 'risk': 'HIGH', 'status': 'investigating', 'vt': {'positives': 60, 'total': 90} },
         
-        # Variar fechas (últimos 10 días)
-        days_ago = random.randint(0, 10)
-        created_at = timezone.now() - timedelta(days=days_ago, hours=random.randint(0, 23))
+        # URLs Inventadas 
+        { 'title': 'SRI Datos Falsos', 'desc': 'Supuesto portal del SRI solicitando datos (Phishing)', 'target': 'http://sri-actualizacion-datos.info/login', 'type': 'url', 'risk': 'MEDIUM', 'status': 'pending', 'vt': {'positives': 0, 'total': 90} },
+        { 'title': 'BCE Verificación', 'desc': 'Correo del supuesto Banco Central (Phishing)', 'target': 'http://bce-verificacion-cuenta.com/acceso', 'type': 'url', 'risk': 'HIGH', 'status': 'pending', 'vt': {'positives': 0, 'total': 90} },
+        { 'title': 'IESS Falso', 'desc': 'Portal falso del IESS (Phishing)', 'target': 'http://iess-consulta-beneficios.net/validar', 'type': 'url', 'risk': 'MEDIUM', 'status': 'investigating', 'vt': {'positives': 0, 'total': 90} },
+        { 'title': 'Pichincha Phishing', 'desc': 'Correo de Banco Pichincha sospechoso', 'target': 'http://pichincha-seguridad-online.xyz/confirmar', 'type': 'url', 'risk': 'HIGH', 'status': 'pending', 'vt': {'positives': 0, 'total': 90} },
+        { 'title': 'WhatsApp Fake', 'desc': 'Enlace de WhatsApp malicioso', 'target': 'http://actualizacion-whatsapp-gratis.site/download', 'type': 'url', 'risk': 'MEDIUM', 'status': 'pending', 'vt': {'positives': 0, 'total': 90} },
+        { 'title': 'Amazon Scam', 'desc': 'Correo de supuesto premio de Amazon', 'target': 'http://premio-amazon-ecuador.click/reclamar', 'type': 'url', 'risk': 'MEDIUM', 'status': 'pending', 'vt': {'positives': 0, 'total': 90} },
+
+        # --- B. URLs SEGURAS (4) ---
+        { 'title': 'Google', 'desc': 'Validación de sitio legítimo', 'target': 'https://www.google.com', 'type': 'url', 'risk': 'LOW', 'status': 'resolved', 'vt': {'positives': 0, 'total': 90} },
+        { 'title': 'PUCESI', 'desc': 'Portal oficial de la universidad', 'target': 'https://www.pucesi.edu.ec', 'type': 'url', 'risk': 'LOW', 'status': 'resolved', 'vt': {'positives': 0, 'total': 90} },
+        { 'title': 'YouTube Video', 'desc': 'Video compartido por cliente', 'target': 'https://www.youtube.com', 'type': 'url', 'risk': 'LOW', 'status': 'investigating', 'vt': {'positives': 0, 'total': 90} },
+        { 'title': 'Wikipedia', 'desc': 'Enlace de referencia', 'target': 'https://www.wikipedia.org', 'type': 'url', 'risk': 'LOW', 'status': 'resolved', 'vt': {'positives': 0, 'total': 90} },
+
+        # --- C. ARCHIVOS MALICIOSOS (4) ---
+        { 'title': 'Factura SRI.exe', 'desc': 'Factura adjunta en correo del SRI (Malware)', 'target': 'factura_sri_2025.pdf.exe', 'type': 'file', 'risk': 'CRITICAL', 'status': 'investigating', 'vt': {'positives': 72, 'total': 90} },
+        { 'title': 'Pago BCE.exe', 'desc': 'Comprobante del Banco Central Malicioso', 'target': 'comprobante_pago_bce.exe', 'type': 'file', 'risk': 'CRITICAL', 'status': 'resolved', 'vt': {'positives': 68, 'total': 90} },
+        { 'title': 'Update IESS.exe', 'desc': 'Actualización del sistema IESS Fake', 'target': 'actualizacion_iess.exe', 'type': 'file', 'risk': 'CRITICAL', 'status': 'pending', 'vt': {'positives': 75, 'total': 90} },
+        { 'title': 'Catalogo.xlsx.exe', 'desc': 'Catálogo enviado por proveedor (Ransomware)', 'target': 'catalogo_repuestos.xlsx.exe', 'type': 'file', 'risk': 'CRITICAL', 'status': 'investigating', 'vt': {'positives': 70, 'total': 90} },
+
+        # --- D. SOLO DESCRIPCIÓN (6) ---
+        { 'title': 'Word con Macros', 'desc': 'Documento Word recibido de cliente nuevo con macros habilitadas', 'target': '', 'type': 'file', 'risk': 'HIGH', 'status': 'investigating', 'vt': {'positives': 0, 'total': 0} },
+        { 'title': 'PDF Link Phishing', 'desc': 'PDF con enlace sospechoso enviado por proveedor desconocido', 'target': '', 'type': 'file', 'risk': 'MEDIUM', 'status': 'pending', 'vt': {'positives': 0, 'total': 0} },
+        { 'title': 'ZIP con Pass', 'desc': 'Archivo ZIP protegido con contraseña de remitente extraño', 'target': '', 'type': 'file', 'risk': 'MEDIUM', 'status': 'pending', 'vt': {'positives': 0, 'total': 0} },
+        { 'title': 'JPG Grande', 'desc': 'Imagen JPG de factura con tamaño inusualmente grande', 'target': '', 'type': 'file', 'risk': 'LOW', 'status': 'resolved', 'vt': {'positives': 0, 'total': 0} },
+        { 'title': 'Installer Unknown', 'desc': 'Instalador de software de origen no verificado', 'target': '', 'type': 'file', 'risk': 'MEDIUM', 'status': 'investigating', 'vt': {'positives': 0, 'total': 0} },
+        { 'title': 'Backup Externo', 'desc': 'Backup del sistema solicitado por técnico externo', 'target': '', 'type': 'file', 'risk': 'LOW', 'status': 'resolved', 'vt': {'positives': 0, 'total': 0} }
+    ]
+
+    count = 0
+    start_date = timezone.now() - timedelta(days=10) # Hace 10 dias
+    
+    for i, item in enumerate(incidents_list):
+        created_at = start_date + timedelta(hours=i*8) 
+        
+        url_val = item['target'] if 'http' in item.get('target', '') else None
+        file_val = None
+        if item.get('target') and not url_val:
+            file_val = f"uploads/{item['target']}"
         
         inc = Incident.objects.create(
-            # title removed, not in model
-            description=f"[{template['title']}] {template['desc']}",
-            incident_type=template['type'],
-            risk_level=template['risk'],
-            status=template['status'],
+            description=f"[{item['title']}] {item['desc']}",
+            incident_type=item['type'],
+            risk_level=item['risk'],
+            status=item['status'],
             reported_by=users_objs['empleado'],
-            url=template['target'] if 'http' in template['target'] else None,
-            # Simular archivo si no es URL
-            attached_file=None if 'http' in template['target'] else f"uploads/{template['target']}",
+            url=url_val,
+            attached_file=file_val,
             analysis_result={
-                'engines': [{'name': 'VirusTotal', 'positives': template['vt_score']['positives'], 'total': template['vt_score']['total']}],
-                'gemini_recomendacion': template['gemini'],
-                'gemini_explicacion': template['gemini'] # Para el reporte PDF
+                'engines': [{'name': 'VirusTotal', 'positives': item['vt']['positives'], 'total': item['vt']['total']}],
+                'gemini_recomendacion': get_gemini_text(item['risk'], item['type']),
+                'gemini_explicacion': get_gemini_text(item['risk'], item['type'])
             },
-            gemini_analysis=template['gemini']
+            gemini_analysis=get_gemini_text(item['risk'], item['type'])
         )
         
-        # Hack para forzar fecha de creación pasada (auto_now_add la sobreescribe al crear, hay que updatear)
+        # Force create date
         inc.created_at = created_at
         inc.save()
         count += 1
+        print(f"[{i+1}/{len(incidents_list)}] Creado: {item['title']} ({item['type']}/{item['risk']}/{item['status']})")
 
-    print(f"Generados {count} incidentes de prueba exitosamente.")
-    print("\n--- SISTEMA LISTO PARA DEMO ---")
+    print(f"\nGenerados {count} incidentes de prueba (CORREGIDOS) exitosamente.")
+    print("--- SISTEMA LISTO PARA DEMO LOCAL ---")
 
 if __name__ == '__main__':
     populate()
