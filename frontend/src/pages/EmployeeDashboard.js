@@ -25,6 +25,10 @@ const EmployeeDashboard = () => {
   // Estado para el efecto de "escribiendo" en la explicación de la IA
   const [typwriterText, setTypewriterText] = useState('');
 
+  // Estado para notificaciones Toast
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [showError, setShowError] = useState(false);
+
   // Función para salir del sistema (Cerrar Sesión)
   const handleLogout = () => {
     localStorage.clear(); // Borra el token guardado
@@ -151,14 +155,19 @@ const EmployeeDashboard = () => {
         }
       });
 
-      alert('Incidente reportado exitosamente. El equipo administrador lo revisará.');
+      // alert('Incidente reportado exitosamente. El equipo administrador lo revisará.');
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 5000); // Ocultar después de 5s
       setAnalysisResult(null);
       setUrl('');
       setAttachedFile(null);
       setDescription('');
+      setDescription('');
+      setDescription('');
     } catch (err) {
       console.error(err);
-      alert('Error al reportar incidente.');
+      setShowError(true);
+      setTimeout(() => setShowError(false), 5000);
     } finally {
       setSubmitting(false);
     }
@@ -536,6 +545,52 @@ const EmployeeDashboard = () => {
 
         </div>
       </div>
+
+      {/* SUCCESS TOAST NOTIFICATION */}
+      <AnimatePresence>
+        {showSuccess && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -50, x: '-50%' }}
+            className="fixed top-8 left-1/2 z-50 flex items-center gap-4 bg-success/10 border border-success text-success px-6 py-4 rounded-xl shadow-2xl backdrop-blur-md"
+          >
+            <div className="bg-success rounded-full p-1">
+              <CheckCircle className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h4 className="font-bold text-lg">¡Reporte Enviado!</h4>
+              <p className="text-sm opacity-90">El incidente ha sido registrado exitosamente.</p>
+            </div>
+            <button onClick={() => setShowSuccess(false)} className="ml-4 hover:bg-success/20 p-1 rounded-lg transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ERROR TOAST NOTIFICATION */}
+      <AnimatePresence>
+        {showError && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, x: '-50%' }}
+            exit={{ opacity: 0, y: -50, x: '-50%' }}
+            className="fixed top-8 left-1/2 z-50 flex items-center gap-4 bg-danger/10 border border-danger text-danger px-6 py-4 rounded-xl shadow-2xl backdrop-blur-md"
+          >
+            <div className="bg-danger rounded-full p-1">
+              <X className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h4 className="font-bold text-lg">Error al Enviar</h4>
+              <p className="text-sm opacity-90">Hubo un problema al registrar el incidente.</p>
+            </div>
+            <button onClick={() => setShowError(false)} className="ml-4 hover:bg-danger/20 p-1 rounded-lg transition-colors">
+              <X className="w-5 h-5" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
     </div>
   );

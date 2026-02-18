@@ -4,6 +4,7 @@ from rest_framework.authentication import TokenAuthentication
 from django.views.decorators.csrf import csrf_exempt
 from rest_framework.response import Response
 from rest_framework import status
+from django.utils import timezone
 from .models import Incident, AnalysisCache
 import hashlib
 from .serializers import IncidentSerializer
@@ -1183,7 +1184,9 @@ def generate_pdf_report(request, incident_id=None):
             p.setFont("Helvetica-Bold", 10)
             p.setFillColor(colors.black)
             p.drawString(40, y, f"ID Incidente: #{incident.id}")
-            p.drawRightString(570, y, f"Fecha: {incident.created_at.strftime('%Y-%m-%d %H:%M')}")
+            # Convertir a hora local
+            local_date = timezone.localtime(incident.created_at)
+            p.drawRightString(570, y, f"Fecha: {local_date.strftime('%Y-%m-%d %H:%M')}")
             y -= 20
             p.drawString(40, y, f"Reportado por: {incident.reported_by.username}")
             p.drawRightString(570, y, f"Estado: {incident.status.upper()}")
@@ -1250,7 +1253,7 @@ def generate_pdf_report(request, incident_id=None):
 
         else:
             # --- MONTHLY REPORT ---
-            now = datetime.now()
+            now = timezone.localtime(timezone.now())
             incidents_qs = Incident.objects.all().order_by('-created_at')
 
             # Logo
@@ -1297,7 +1300,7 @@ def generate_pdf_report(request, incident_id=None):
                 # if inc.id % 2 == 0: p.setFillColor(colors.whitesmoke) ...
 
                 p.drawString(45, y, str(inc.id))
-                p.drawString(85, y, inc.created_at.strftime('%Y-%m-%d'))
+                p.drawString(85, y, timezone.localtime(inc.created_at).strftime('%Y-%m-%d'))
                 p.drawString(185, y, inc.reported_by.username[:15])
                 p.drawString(285, y, inc.incident_type)
                 
