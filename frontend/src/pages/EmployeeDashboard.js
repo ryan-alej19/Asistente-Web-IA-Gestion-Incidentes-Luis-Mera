@@ -148,7 +148,7 @@ const EmployeeDashboard = () => {
         formData.append('analysis_result', JSON.stringify(snapshot));
       }
 
-      await axios.post('http://localhost:8000/api/incidents/create/', formData, {
+      await axios.post(`${API_URL}/api/incidents/create/`, formData, {
         headers: {
           Authorization: `Token ${token}`,
           'Content-Type': 'multipart/form-data'
