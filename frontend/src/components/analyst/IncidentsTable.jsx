@@ -162,44 +162,49 @@ const IncidentsTable = ({ incidents, onView, onChangeState }) => {
                 </div>
             )}
 
-            {/* Paginacion */}
-            {totalPages > 1 && (
+            {/* Paginacion - siempre visible si hay incidentes */}
+            {incidents.length > 0 && (
                 <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-background/30">
                     <div className="text-sm text-gray-500">
-                        Mostrando <span className="text-gray-300 font-medium">{startIndex + 1}</span> - <span className="text-gray-300 font-medium">{Math.min(endIndex, incidents.length)}</span> de <span className="text-gray-300 font-medium">{incidents.length}</span> incidentes
+                        Página <span className="text-gray-300 font-medium">{currentPage}</span> de <span className="text-gray-300 font-medium">{totalPages}</span>
+                        <span className="mx-2 text-gray-600">·</span>
+                        <span className="text-gray-300 font-medium">{incidents.length}</span> incidentes totales
                     </div>
-                    <div className="flex items-center gap-1">
-                        <button
-                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                            disabled={currentPage === 1}
-                            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                            <ChevronLeft className="w-4 h-4" />
-                        </button>
-
-                        {getPageNumbers().map(page => (
+                    {totalPages > 1 && (
+                        <div className="flex items-center gap-1">
                             <button
-                                key={page}
-                                onClick={() => setCurrentPage(page)}
-                                className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${currentPage === page
+                                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                                disabled={currentPage === 1}
+                                className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                                <ChevronLeft className="w-4 h-4" />
+                            </button>
+
+                            {getPageNumbers().map(page => (
+                                <button
+                                    key={page}
+                                    onClick={() => setCurrentPage(page)}
+                                    className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${currentPage === page
                                         ? 'bg-primary text-white shadow-lg shadow-primary/30'
                                         : 'text-gray-400 hover:text-white hover:bg-white/10'
-                                    }`}
-                            >
-                                {page}
-                            </button>
-                        ))}
+                                        }`}
+                                >
+                                    {page}
+                                </button>
+                            ))}
 
-                        <button
-                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                            disabled={currentPage === totalPages}
-                            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                        >
-                            <ChevronRight className="w-4 h-4" />
-                        </button>
-                    </div>
+                            <button
+                                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                                disabled={currentPage === totalPages}
+                                className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                            >
+                                <ChevronRight className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
                 </div>
             )}
+
         </div>
     );
 };
