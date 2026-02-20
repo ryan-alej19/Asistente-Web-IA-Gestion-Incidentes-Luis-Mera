@@ -118,7 +118,7 @@ def inject():
     existing_count = Incident.objects.count()
     print(f"\nIncidentes existentes en BD: {existing_count}")
 
-    # Obtener o crear usuarios
+    # Obtener o crear usuarios (siempre, para garantizar que existan)
     users_data = [
         {'username': 'empleado', 'email': 'empleado@tecnicontrol.com', 'role': 'employee', 'password': 'empleado123'},
         {'username': 'analista', 'email': 'analista@tecnicontrol.com', 'role': 'analyst', 'password': 'analista123'},
@@ -142,6 +142,14 @@ def inject():
         users_objs[u_data['username']] = user
 
     print(f"  Usuarios verificados: {list(users_objs.keys())}")
+
+    # GUARDIA: Si ya hay suficientes incidentes, no re-inyectar
+    if existing_count >= 80:
+        print(f"\n  Ya existen {existing_count} incidentes. Saltando inyeccion.")
+        print("  Sistema listo.")
+        print("=" * 60)
+        return
+
 
     # ===== DEFINICION DE 80 INCIDENTES RETROACTIVOS =====
 
