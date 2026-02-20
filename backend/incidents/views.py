@@ -595,9 +595,16 @@ def list_incidents(request):
         if date_from and date_to:
             incidents = incidents.filter(created_at__range=[date_from, date_to])
             
+        # Ordenamiento: mas antiguos primero (pagina 1 = primeros incidentes)
+        ordering = request.query_params.get('ordering', 'created_at')
+        if ordering in ['created_at', '-created_at', 'risk_level', '-risk_level', 'id', '-id']:
+            incidents = incidents.order_by(ordering)
+        else:
+            incidents = incidents.order_by('created_at')
+            
         # Paginación
         paginator = PageNumberPagination()
-        paginator.page_size = 100 # Aumentado para tesis (ver todos de una vez)
+        paginator.page_size = 200  # Mostrar todos (frontend maneja paginacion visual)
         result_page = paginator.paginate_queryset(incidents, request)
         
         serializer = IncidentSerializer(result_page, many=True)

@@ -1,26 +1,40 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import {
     FileText, Link, ShieldAlert, ShieldCheck, AlertTriangle, AlertCircle,
-    CheckCircle, Eye, RefreshCw, HelpCircle
+    CheckCircle, Eye, RefreshCw, HelpCircle, ChevronLeft, ChevronRight
 } from 'lucide-react';
+
+const ITEMS_PER_PAGE = 20;
 
 const IncidentsTable = ({ incidents, onView, onChangeState }) => {
 
-    // Animation variants
-    const container = {
-        hidden: { opacity: 0 },
-        show: {
-            opacity: 1,
-            transition: {
-                staggerChildren: 0.05
-            }
-        }
-    };
+    const [currentPage, setCurrentPage] = useState(1);
 
-    const item = {
-        hidden: { opacity: 0, x: -20 },
-        show: { opacity: 1, x: 0 }
+    // Paginacion
+    const totalPages = Math.ceil(incidents.length / ITEMS_PER_PAGE);
+    const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+    const endIndex = startIndex + ITEMS_PER_PAGE;
+    const paginatedIncidents = incidents.slice(startIndex, endIndex);
+
+    // Reset a pagina 1 cuando cambian los filtros
+    React.useEffect(() => {
+        setCurrentPage(1);
+    }, [incidents.length]);
+
+    // Generar numeros de pagina visibles
+    const getPageNumbers = () => {
+        const pages = [];
+        const maxVisible = 5;
+        let start = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+        let end = Math.min(totalPages, start + maxVisible - 1);
+        if (end - start < maxVisible - 1) {
+            start = Math.max(1, end - maxVisible + 1);
+        }
+        for (let i = start; i <= end; i++) {
+            pages.push(i);
+        }
+        return pages;
     };
 
     return (
@@ -39,8 +53,12 @@ const IncidentsTable = ({ incidents, onView, onChangeState }) => {
                 </thead>
                 <motion.tbody
                     className="divide-y divide-border"
+                    key={currentPage}
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    transition={{ duration: 0.2 }}
                 >
-                    {incidents.map((incident) => (
+                    {paginatedIncidents.map((incident) => (
                         <motion.tr
                             key={incident.id}
                             className="hover:bg-white/5 transition-colors group"
@@ -141,6 +159,45 @@ const IncidentsTable = ({ incidents, onView, onChangeState }) => {
                     </div>
                     <p className="text-lg font-medium text-gray-400">Sin incidentes</p>
                     <p className="text-sm">No hay incidentes que coincidan con los filtros.</p>
+                </div>
+            )}
+
+            {/* Paginacion */}
+            {totalPages > 1 && (
+                <div className="flex items-center justify-between px-6 py-4 border-t border-border bg-background/30">
+                    <div className="text-sm text-gray-500">
+                        Mostrando <span className="text-gray-300 font-medium">{startIndex + 1}</span> - <span className="text-gray-300 font-medium">{Math.min(endIndex, incidents.length)}</span> de <span className="text-gray-300 font-medium">{incidents.length}</span> incidentes
+                    </div>
+                    <div className="flex items-center gap-1">
+                        <button
+                            onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                            disabled={currentPage === 1}
+                            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            <ChevronLeft className="w-4 h-4" />
+                        </button>
+
+                        {getPageNumbers().map(page => (
+                            <button
+                                key={page}
+                                onClick={() => setCurrentPage(page)}
+                                className={`min-w-[36px] h-9 rounded-lg text-sm font-medium transition-all ${currentPage === page
+                                        ? 'bg-primary text-white shadow-lg shadow-primary/30'
+                                        : 'text-gray-400 hover:text-white hover:bg-white/10'
+                                    }`}
+                            >
+                                {page}
+                            </button>
+                        ))}
+
+                        <button
+                            onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                            disabled={currentPage === totalPages}
+                            className="p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                        >
+                            <ChevronRight className="w-4 h-4" />
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
