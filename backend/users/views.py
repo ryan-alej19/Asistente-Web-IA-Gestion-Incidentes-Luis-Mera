@@ -7,12 +7,23 @@ from django.contrib.auth.models import User, update_last_login
 from django.shortcuts import get_object_or_404
 from .models import UserProfile
 from .serializers import UserSerializer
+import logging
+import time
+
+auth_log = logging.getLogger('auth_logger')
 
 class CustomAuthToken(ObtainAuthToken):
     def post(self, request, *args, **kwargs):
+        client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        username = request.data.get('username', 'N/A')
+
         serializer = self.serializer_class(data=request.data,
                                            context={'request': request})
-        serializer.is_valid(raise_exception=True)
+        
+        if not serializer.is_valid():
+            auth_log.warning(f"LOGIN FALLIDO - Usuario: {username} | IP: {client_ip} | Motivo: Credenciales incorrectas")
+            return Response({'non_field_errors': ['Credenciales invalidas']}, status=status.HTTP_400_BAD_REQUEST)
+        
         user = serializer.validated_data['user']
         token, created = Token.objects.get_or_create(user=user)
         
@@ -22,6 +33,8 @@ class CustomAuthToken(ObtainAuthToken):
         role = 'employee'
         if hasattr(user, 'profile'):
             role = user.profile.role
+        
+        auth_log.info(f"LOGIN EXITOSO - Usuario: {username} | Rol: {role} | IP: {client_ip}")
             
         return Response({
             'token': token.key,

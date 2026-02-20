@@ -120,13 +120,44 @@ TEMPLATES = [
     },
 ]
 
-# LOGGING: Mostrar INFO en consola para debugging
+# Crear directorio de logs si no existe
+import pathlib as _pathlib
+_logs_dir = BASE_DIR / 'logs'
+_pathlib.Path(_logs_dir).mkdir(exist_ok=True)
+
+# LOGGING: Consola + Archivos para validacion academica
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
+    'formatters': {
+        'verbose': {
+            'format': '[{asctime}] [{levelname}] {message}',
+            'style': '{',
+            'datefmt': '%Y-%m-%d %H:%M:%S',
+        },
+    },
     'handlers': {
         'console': {
             'class': 'logging.StreamHandler',
+            'formatter': 'verbose',
+        },
+        'auth_file': {
+            'class': 'logging.FileHandler',
+            'filename': str(_logs_dir / 'auth.log'),
+            'formatter': 'verbose',
+            'encoding': 'utf-8',
+        },
+        'performance_file': {
+            'class': 'logging.FileHandler',
+            'filename': str(_logs_dir / 'performance.log'),
+            'formatter': 'verbose',
+            'encoding': 'utf-8',
+        },
+        'reports_file': {
+            'class': 'logging.FileHandler',
+            'filename': str(_logs_dir / 'reports.log'),
+            'formatter': 'verbose',
+            'encoding': 'utf-8',
         },
     },
     'root': {
@@ -140,7 +171,22 @@ LOGGING = {
             'propagate': False,
         },
         'incidents': {
-            'handlers': ['console'],
+            'handlers': ['console', 'performance_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'auth_logger': {
+            'handlers': ['console', 'auth_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'performance': {
+            'handlers': ['console', 'performance_file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+        'reports': {
+            'handlers': ['console', 'reports_file'],
             'level': 'INFO',
             'propagate': False,
         },

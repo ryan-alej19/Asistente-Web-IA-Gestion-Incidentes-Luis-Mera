@@ -14,11 +14,14 @@ from services.gemini_service import GeminiService
 from incidents.heuristic_classifier import HeuristicClassifier
 import logging
 import zipfile
+import time
 from django.http import HttpResponse
 from reportlab.pdfgen import canvas
 from reportlab.lib.pagesizes import letter
 
 logger = logging.getLogger(__name__)
+perf_log = logging.getLogger('performance')
+report_log = logging.getLogger('reports')
 
 # Imports for Exports
 import csv
@@ -79,6 +82,9 @@ def is_encrypted_archive(file_obj):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def analyze_file_preview(request):
+    analysis_start = time.time()
+    perf_log.info(f"[ANALISIS INICIO] Tipo: ARCHIVO | Usuario: {request.user.username}")
+    
     if request.method != 'POST':
         return Response({'error': 'Método no permitido'}, status=405)
     
@@ -256,6 +262,9 @@ def analyze_file_preview(request):
         # Guardar en Cache (24h = 86400s)
         cache.set(cache_key, response_data, 86400)
         
+        duration = time.time() - analysis_start
+        perf_log.info(f"[ANALISIS COMPLETADO] Tipo: ARCHIVO | Archivo: {file_obj.name} | Duracion: {duration:.2f}s | Riesgo: {risk} | Detecciones: {total_positives}/{total_engines}")
+        
         return Response(response_data)
         
     except Exception as e:
@@ -267,6 +276,8 @@ def analyze_file_preview(request):
 @api_view(['POST'])
 @permission_classes([IsAuthenticated])
 def analyze_url_preview(request):
+    analysis_start = time.time()
+    perf_log.info(f"[ANALISIS INICIO] Tipo: URL | Usuario: {request.user.username}")
     try:
         url = request.data.get('url')
         if not url:
@@ -455,6 +466,9 @@ def analyze_url_preview(request):
         
         # Guardar en Cache (24h = 86400s)
         cache.set(cache_key, final_response, 86400)
+        
+        duration = time.time() - analysis_start
+        perf_log.info(f"[ANALISIS COMPLETADO] Tipo: URL | URL: {url} | Duracion: {duration:.2f}s | Riesgo: {risk} | Detecciones: {max_positives}/{total_scanned}")
         
         return Response(final_response)
 
@@ -655,6 +669,7 @@ def manage_incident_notes(request, incident_id):
 def incident_stats(request):
     # Estadisticas para el Dashboard
     # Solo permitido para analistas y administradores
+    dashboard_start = time.time()
     try:
         user_role = getattr(request.user, 'profile', None) and request.user.profile.role or 'employee'
         if user_role not in ['admin', 'analyst']:
@@ -684,6 +699,9 @@ def incident_stats(request):
             'investigating': Incident.objects.filter(status='investigating').count(),
             'resolved': Incident.objects.filter(status='resolved').count()
         }
+        
+        dashboard_duration = time.time() - dashboard_start
+        perf_log.info(f"[DASHBOARD] Tiempo de consulta: {dashboard_duration:.3f}s | Total incidentes: {total_incidents} | Usuario: {request.user.username}")
         
         return Response({
             'total': total_incidents,
@@ -1135,6 +1153,9 @@ def export_incidents_csv(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def generate_pdf_report(request, incident_id=None):
+    pdf_start = time.time()
+    pdf_type = 'individual' if incident_id else 'mensual'
+    report_log.info(f"[PDF INICIO] Tipo: {pdf_type} | Incidente: {incident_id or 'todos'} | Usuario: {request.user.username}")
     try:
         buffer = BytesIO()
         p = canvas.Canvas(buffer, pagesize=letter)
@@ -1324,6 +1345,10 @@ def generate_pdf_report(request, incident_id=None):
         filename = f"reporte_incidente_{incident_id}.pdf" if incident_id else f"reporte_mensual_{datetime.now().strftime('%Y-%m')}.pdf"
         response = HttpResponse(buffer, content_type='application/pdf')
         response['Content-Disposition'] = f'attachment; filename="{filename}"'
+        
+        pdf_duration = time.time() - pdf_start
+        report_log.info(f"[PDF COMPLETADO] Tipo: {pdf_type} | Archivo: {filename} | Duracion: {pdf_duration:.2f}s")
+        
         return response
 
     except Exception as e:
