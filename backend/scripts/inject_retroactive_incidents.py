@@ -508,16 +508,15 @@ def inject():
     for inc_id, data in fp_updates.items():
         try:
             inc = Incident.objects.get(id=inc_id)
-            # Solo actualizar si es necesario
-            if inc.risk_level != 'LOW' or data['title'] not in str(inc.description):
-                inc.description = f"[{data['title']}] {data['desc']}"
-                inc.incident_type = 'file'
-                inc.risk_level = 'LOW'
-                inc.url = ""
-                inc.attached_file = f"uploads/{data['title']}"
-                
-                analysis = inc.analysis_result or {}
-                engines = analysis.get('engines', [])
+            # Forzar actualización incondicional para asegurar que en producción quede idéntico
+            inc.description = f"[{data['title']}] {data['desc']}"
+            inc.incident_type = 'file'
+            inc.risk_level = 'LOW'
+            inc.url = ""
+            inc.attached_file = f"uploads/{data['title']}"
+            
+            analysis = inc.analysis_result or {}
+            engines = analysis.get('engines', [])
                 vt_found = False
                 for e in engines:
                     if e.get('name') == 'VirusTotal':
