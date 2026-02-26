@@ -199,11 +199,18 @@ class MetaDefenderService:
                     # Aceptamos total_avs > 0 o si lookup_results existe (aunque sea 0 detected)
                     if total_avs > 0 or 'lookup_results' in res_data:
                         logger.info(f"[MD] Lookup exitoso: {total_detected}/{total_avs}")
+                        
+                        parsed = urllib.parse.urlparse(url if url.startswith(('http', 'https')) else f'http://{url}')
+                        host = parsed.hostname or url
+                        import re
+                        is_ip = re.match(r'^\d{1,3}(\.\d{1,3}){3}$', host)
+                        path_type = 'ip' if is_ip else 'domain'
+                        
                         return {
                             'positives': total_detected,
                             'total': total_avs,
                             'source': 'MetaDefender',
-                            'link': f"https://metadefender.opswat.com/results/url/{urllib.parse.quote(url, safe='')}/overview" 
+                            'link': f"https://metadefender.com/results/{path_type}/{host}" 
                         }
             except Exception as e:
                 logger.warning(f"[MD] Error en lookup: {e}")
@@ -243,11 +250,17 @@ class MetaDefenderService:
                             if total_avs == 0 and attempt < 15:
                                 continue
 
+                            parsed = urllib.parse.urlparse(url if url.startswith(('http', 'https')) else f'http://{url}')
+                            host = parsed.hostname or url
+                            import re
+                            is_ip = re.match(r'^\d{1,3}(\.\d{1,3}){3}$', host)
+                            path_type = 'ip' if is_ip else 'domain'
+
                             return {
                                 'positives': total_detected,
                                 'total': total_avs,
                                 'source': 'MetaDefender',
-                                'link': f"https://metadefender.opswat.com/results/url/{data_id}/overview"
+                                'link': f"https://metadefender.com/results/{path_type}/{host}"
                             }
             
             logger.warning(f"[MD] Timeout o error en analisis URL. Status: {response.status_code}. Msg: {response.text[:100]}")

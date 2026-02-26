@@ -259,7 +259,7 @@ const AnalystDashboard = () => {
                         <LogOut className="w-5 h-5 group-hover:text-danger transition-colors" />
                         <span>Cerrar Sesión</span>
                     </button>
-                    <p className="text-center text-gray-600 text-[10px] mt-4 font-mono">v.2.0.0 Enterprise</p>
+                    <p className="text-center text-gray-600 text-[10px] mt-4 font-mono">v.1.2.0</p>
                 </div>
             </aside>
 

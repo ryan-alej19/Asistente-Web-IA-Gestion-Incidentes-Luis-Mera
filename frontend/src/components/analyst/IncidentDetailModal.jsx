@@ -307,7 +307,7 @@ const IncidentDetailModal = ({ incident, onClose, onUpdate }) => {
                                                                         {engine.alert ? 'DETECTADO' : 'LIMPIO'}
                                                                     </div>
                                                                 )}
-                                                                {engine.link && engine.link !== '#' && (
+                                                                {engine.link && engine.link !== '#' && !(incident.incident_type === 'url' && engine.name === 'MetaDefender') && (
                                                                     <a href={engine.link} target="_blank" rel="noreferrer" className="text-primary hover:text-white text-xs mt-1 block transition-colors">
                                                                         Ver Reporte
                                                                     </a>

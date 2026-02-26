@@ -13,6 +13,13 @@ const Login = ({ setAuth, setRole }) => {
     const [loading, setLoading] = useState(false);
     const navigate = useNavigate();
 
+    // Limpiar caché siempre que se entra a la vista de Login
+    React.useEffect(() => {
+        localStorage.clear();
+        setAuth(false);
+        setRole('');
+    }, [setAuth, setRole]);
+
     const handleLogin = async (e) => {
         e.preventDefault();
         setLoading(true);

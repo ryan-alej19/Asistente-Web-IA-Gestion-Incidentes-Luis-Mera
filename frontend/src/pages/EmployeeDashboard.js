@@ -21,6 +21,7 @@ const EmployeeDashboard = () => {
   const [analyzing, setAnalyzing] = useState(false);
   const [analysisResult, setAnalysisResult] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Estado para el efecto de "escribiendo" en la explicación de la IA
   const [typwriterText, setTypewriterText] = useState('');
@@ -39,6 +40,26 @@ const EmployeeDashboard = () => {
   const handleFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       const file = e.target.files[0];
+      setAttachedFile(file);
+      setAnalysisResult(null); // Resetea resultados anteriores
+    }
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
       setAttachedFile(file);
       setAnalysisResult(null); // Resetea resultados anteriores
     }
@@ -288,8 +309,13 @@ const EmployeeDashboard = () => {
             ) : (
               <div className="relative">
                 {!attachedFile ? (
-                  <label className="flex flex-col items-center justify-center w-full h-64 border-2 border-dashed border-border rounded-xl cursor-pointer bg-surface/50 hover:bg-surface hover:border-primary/50 transition-all group">
-                    <Upload className="w-12 h-12 text-gray-500 group-hover:text-primary mb-4 transition-colors" />
+                  <label
+                    className={`flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-xl cursor-pointer transition-all group ${isDragging ? 'bg-primary/10 border-primary' : 'border-border bg-surface/50 hover:bg-surface hover:border-primary/50'}`}
+                    onDragOver={handleDragOver}
+                    onDragLeave={handleDragLeave}
+                    onDrop={handleDrop}
+                  >
+                    <Upload className={`w-12 h-12 mb-4 transition-colors ${isDragging ? 'text-primary' : 'text-gray-500 group-hover:text-primary'}`} />
                     <p className="text-gray-300 font-medium text-lg">Haga clic o arrastre un archivo aquí</p>
                     <p className="text-gray-500 text-sm mt-2">Soporta PDF, DOCX, EXE, ZIP...</p>
                     <input type="file" className="hidden" onChange={handleFileChange} />
@@ -526,7 +552,7 @@ const EmployeeDashboard = () => {
                         </div>
                       </div>
 
-                      {engine.link && (
+                      {engine.link && !(analysisType === 'url' && engine.name === 'MetaDefender') && (
                         <a
                           href={engine.link}
                           target="_blank"

@@ -25,3 +25,16 @@ class UserSerializer(serializers.ModelSerializer):
     def get_date_joined_formatted(self, obj):
         from django.utils import timezone
         return timezone.localtime(obj.date_joined).strftime('%Y-%m-%d')
+
+from .models import LoginAttempt
+
+class LoginAttemptSerializer(serializers.ModelSerializer):
+    timestamp_formatted = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LoginAttempt
+        fields = ['id', 'username', 'ip_address', 'user_agent', 'successful', 'timestamp', 'timestamp_formatted']
+
+    def get_timestamp_formatted(self, obj):
+        from django.utils import timezone
+        return timezone.localtime(obj.timestamp).strftime('%Y-%m-%d %H:%M:%S')

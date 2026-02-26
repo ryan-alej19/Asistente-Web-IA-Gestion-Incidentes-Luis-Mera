@@ -5,22 +5,27 @@ from rest_framework.authtoken.views import ObtainAuthToken
 from rest_framework.authtoken.models import Token
 from django.contrib.auth.models import User, update_last_login
 from django.shortcuts import get_object_or_404
-from .models import UserProfile
-from .serializers import UserSerializer
+from .models import UserProfile, LoginAttempt
 import logging
-import time
 
 auth_log = logging.getLogger('auth_logger')
 
 class CustomAuthToken(ObtainAuthToken):
     def post(self, request, *args, **kwargs):
         client_ip = request.META.get('REMOTE_ADDR', 'unknown')
+        user_agent = request.META.get('HTTP_USER_AGENT', 'unknown')
         username = request.data.get('username', 'N/A')
 
         serializer = self.serializer_class(data=request.data,
                                            context={'request': request})
         
         if not serializer.is_valid():
+            LoginAttempt.objects.create(
+                username=username,
+                ip_address=client_ip,
+                user_agent=user_agent,
+                successful=False
+            )
             auth_log.warning(f"LOGIN FALLIDO - Usuario: {username} | IP: {client_ip} | Motivo: Credenciales incorrectas")
             return Response({'non_field_errors': ['Credenciales invalidas']}, status=status.HTTP_400_BAD_REQUEST)
         
@@ -34,6 +39,12 @@ class CustomAuthToken(ObtainAuthToken):
         if hasattr(user, 'profile'):
             role = user.profile.role
         
+        LoginAttempt.objects.create(
+            username=user.username,
+            ip_address=client_ip,
+            user_agent=user_agent,
+            successful=True
+        )
         auth_log.info(f"LOGIN EXITOSO - Usuario: {username} | Rol: {role} | IP: {client_ip}")
             
         return Response({
@@ -43,6 +54,14 @@ class CustomAuthToken(ObtainAuthToken):
             'role': role
         })
 
+from .serializers import UserSerializer, LoginAttemptSerializer
+from rest_framework.pagination import PageNumberPagination
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 1000
+
 class IsAdminUser(permissions.BasePermission):
     """
     Permite acceso solo a usuarios con rol 'admin'.
@@ -51,6 +70,16 @@ class IsAdminUser(permissions.BasePermission):
         return bool(request.user and request.user.is_authenticated and 
                     hasattr(request.user, 'profile') and 
                     request.user.profile.role == 'admin')
+
+class LoginAttemptListView(generics.ListAPIView):
+    """
+    Lista todos los intentos de inicio de sesión.
+    Solo accesible para administradores.
+    """
+    queryset = LoginAttempt.objects.all()
+    serializer_class = LoginAttemptSerializer
+    permission_classes = [IsAdminUser]
+    pagination_class = StandardResultsSetPagination
 
 class UserListView(generics.ListAPIView):
     queryset = User.objects.all().order_by('-date_joined')

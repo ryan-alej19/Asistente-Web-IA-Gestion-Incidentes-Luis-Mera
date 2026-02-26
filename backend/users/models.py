@@ -32,3 +32,22 @@ class UserProfile(models.Model):
 def create_user_profile(sender, instance, created, **kwargs):
     if created:
         UserProfile.objects.create(user=instance)
+
+class LoginAttempt(models.Model):
+    """
+    Registro de intentos de inicio de sesión exitosos y fallidos para la auditoría de seguridad.
+    """
+    username = models.CharField(max_length=150, help_text="Nombre de usuario ingresado")
+    ip_address = models.GenericIPAddressField(null=True, blank=True, help_text="Dirección IP de origen")
+    user_agent = models.TextField(null=True, blank=True, help_text="Navegador y sistema operativo")
+    successful = models.BooleanField(default=False, help_text="¿Fue exitoso el inicio de sesión?")
+    timestamp = models.DateTimeField(auto_now_add=True, help_text="Fecha y hora del intento")
+
+    class Meta:
+        verbose_name = 'Intento de Inicio de Sesión'
+        verbose_name_plural = 'Intentos de Inicio de Sesión'
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        status_text = "Éxito" if self.successful else "Fallido"
+        return f"{self.timestamp} - {self.username} [{self.ip_address}] - {status_text}"

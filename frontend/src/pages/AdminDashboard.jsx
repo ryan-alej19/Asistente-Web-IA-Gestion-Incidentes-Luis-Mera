@@ -9,6 +9,7 @@ import IncidentsTable from '../components/analyst/IncidentsTable';
 import IncidentDetailModal from '../components/analyst/IncidentDetailModal';
 import ChangeStateModal from '../components/analyst/ChangeStateModal';
 import UsersTable from '../components/admin/UsersTable';
+import LoginAttemptsTable from '../components/admin/LoginAttemptsTable';
 import API_URL from '../config/api';
 
 const AdminDashboard = () => {
@@ -26,6 +27,9 @@ const AdminDashboard = () => {
 
     // Users State
     const [users, setUsers] = useState([]);
+
+    // Audit State
+    const [loginAttempts, setLoginAttempts] = useState([]);
 
     // Modal State
     const [selectedIncident, setSelectedIncident] = useState(null);
@@ -50,13 +54,15 @@ const AdminDashboard = () => {
             const token = localStorage.getItem('token');
             const config = { headers: { Authorization: `Token ${token}` } };
 
-            // Cargar estadísticas y usuarios en paralelo
-            const [statsRes, usersRes] = await Promise.all([
+            // Cargar estadísticas y usuarios y logs en paralelo
+            const [statsRes, usersRes, attemptsRes] = await Promise.all([
                 axios.get(`${API_URL}/api/incidents/stats/`, config),
-                axios.get(`${API_URL}/api/users/list/`, config)
+                axios.get(`${API_URL}/api/users/list/`, config),
+                axios.get(`${API_URL}/api/users/login-attempts/`, config)
             ]);
             setStats(statsRes.data);
             setUsers(usersRes.data);
+            setLoginAttempts(attemptsRes.data.results);
         } catch (err) {
             console.error("Error cargando estadísticas y usuarios:", err);
         }
@@ -243,6 +249,16 @@ const AdminDashboard = () => {
                         <Users className="w-5 h-5" />
                         <span>Usuarios y Accesos</span>
                     </button>
+                    <button
+                        onClick={() => setActiveTab('audit')}
+                        className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all font-medium ${activeTab === 'audit'
+                            ? 'bg-green-600/10 text-green-400 border border-green-600/20 shadow-lg shadow-green-900/10'
+                            : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                            }`}
+                    >
+                        <ShieldAlert className="w-5 h-5" />
+                        <span>Auditoría de Seguridad</span>
+                    </button>
                 </nav>
 
                 <div className="p-6 border-t border-border">
@@ -253,7 +269,7 @@ const AdminDashboard = () => {
                         <LogOut className="w-5 h-5 group-hover:text-danger transition-colors" />
                         <span>Cerrar Sesión</span>
                     </button>
-                    <p className="text-center text-gray-600 text-[10px] mt-4 font-mono">v.2.0.0 Admin</p>
+                    <p className="text-center text-gray-600 text-[10px] mt-4 font-mono">v.1.2.0 Admin</p>
                 </div>
             </aside>
 
@@ -262,8 +278,13 @@ const AdminDashboard = () => {
                 <header className="bg-surface/50 backdrop-blur-md border-b border-border p-6 flex justify-between items-center sticky top-0 z-10">
                     <div>
                         <h2 className="text-2xl font-bold text-white flex items-center gap-3">
-                            {activeTab === 'dashboard' ? <LayoutDashboard className="w-6 h-6 text-blue-400" /> : <Users className="w-6 h-6 text-yellow-400" />}
-                            {activeTab === 'dashboard' ? 'Dashboard & Incidentes' : 'Gestión de Usuarios'}
+                            {activeTab === 'dashboard' && <LayoutDashboard className="w-6 h-6 text-blue-400" />}
+                            {activeTab === 'users' && <Users className="w-6 h-6 text-yellow-400" />}
+                            {activeTab === 'audit' && <ShieldAlert className="w-6 h-6 text-green-400" />}
+
+                            {activeTab === 'dashboard' && 'Dashboard & Incidentes'}
+                            {activeTab === 'users' && 'Gestión de Usuarios'}
+                            {activeTab === 'audit' && 'Auditoría de Seguridad'}
                         </h2>
                         <p className="text-gray-400 text-sm mt-1">Panel de control administrativo</p>
                     </div>
@@ -354,6 +375,16 @@ const AdminDashboard = () => {
                                 onToggleStatus={handleToggleStatus}
                                 onChangeRole={handleChangeRole}
                             />
+                        </motion.div>
+                    )}
+
+                    {activeTab === 'audit' && (
+                        <motion.div
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3 }}
+                        >
+                            <LoginAttemptsTable attempts={loginAttempts} />
                         </motion.div>
                     )}
 
