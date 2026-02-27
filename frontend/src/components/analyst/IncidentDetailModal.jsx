@@ -243,86 +243,93 @@ const IncidentDetailModal = ({ incident, onClose, onUpdate }) => {
                                         <p>Conectando con servicios de inteligencia...</p>
                                     </div>
                                 ) : analysisDetails ? (
-                                    <>
-                                        {/* Gemini */}
-                                        <div className="bg-surface rounded-xl border border-border overflow-hidden">
-                                            <div className="bg-gradient-to-r from-blue-900/10 to-purple-900/10 p-4 border-b border-border flex items-center gap-3">
-                                                <GeminiLogo className="w-6 h-6" />
-                                                <h3 className="text-white font-bold">Análisis Inteligente (Gemini AI)</h3>
-                                            </div>
-                                            <div className="p-6">
-                                                <div className="mb-6">
-                                                    <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-3">Explicación de la Amenaza</h4>
-                                                    <div className="text-gray-300 leading-relaxed text-sm whitespace-pre-wrap pl-4 border-l-2 border-primary/30">
-                                                        {analysisDetails.gemini_explicacion || "Análisis no disponible."}
+                                    (() => {
+                                        const heuristicEngine = analysisDetails.engines?.find(e => e.name === 'Clasificador Heurístico');
+                                        const isHeuristicThreat = heuristicEngine?.detected === true || heuristicEngine?.alert === true;
+
+                                        return (
+                                            <>
+                                                {/* Gemini */}
+                                                <div className="bg-surface rounded-xl border border-border overflow-hidden">
+                                                    <div className="bg-gradient-to-r from-blue-900/10 to-purple-900/10 p-4 border-b border-border flex items-center gap-3">
+                                                        <GeminiLogo className="w-6 h-6" />
+                                                        <h3 className="text-white font-bold">Análisis Inteligente (Gemini AI)</h3>
+                                                    </div>
+                                                    <div className="p-6">
+                                                        <div className="mb-6">
+                                                            <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-3">Explicación de la Amenaza</h4>
+                                                            <div className="text-gray-300 leading-relaxed text-sm whitespace-pre-wrap pl-4 border-l-2 border-primary/30">
+                                                                {analysisDetails.gemini_explicacion || "Análisis no disponible."}
+                                                            </div>
+                                                        </div>
+                                                        {analysisDetails.gemini_recomendacion && (
+                                                            <div className="bg-blue-500/5 p-4 rounded-lg border border-blue-500/10">
+                                                                <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Recomendación de Seguridad</h4>
+                                                                <p className="text-white text-sm font-medium">{analysisDetails.gemini_recomendacion}</p>
+                                                            </div>
+                                                        )}
                                                     </div>
                                                 </div>
-                                                {analysisDetails.gemini_recomendacion && (
-                                                    <div className="bg-blue-500/5 p-4 rounded-lg border border-blue-500/10">
-                                                        <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Recomendación de Seguridad</h4>
-                                                        <p className="text-white text-sm font-medium">{analysisDetails.gemini_recomendacion}</p>
+
+                                                {/* Engines */}
+                                                <div className="bg-surface rounded-xl border border-border p-6">
+                                                    <div className="flex items-center justify-between mb-6">
+                                                        <h3 className="text-white font-bold flex items-center gap-2">
+                                                            <ShieldCheck className="w-5 h-5 text-primary" />
+                                                            Motores de Seguridad
+                                                        </h3>
+                                                        <span className="text-xs text-gray-500 font-bold bg-white/5 px-2 py-1 rounded">
+                                                            Resultados en Tiempo Real
+                                                        </span>
                                                     </div>
-                                                )}
-                                            </div>
-                                        </div>
 
-                                        {/* Engines */}
-                                        <div className="bg-surface rounded-xl border border-border p-6">
-                                            <div className="flex items-center justify-between mb-6">
-                                                <h3 className="text-white font-bold flex items-center gap-2">
-                                                    <ShieldCheck className="w-5 h-5 text-primary" />
-                                                    Motores de Seguridad
-                                                </h3>
-                                                <span className="text-xs text-gray-500 font-bold bg-white/5 px-2 py-1 rounded">
-                                                    Resultados en Tiempo Real
-                                                </span>
-                                            </div>
-
-                                            {analysisDetails.engines && analysisDetails.engines.length > 0 ? (
-                                                <div className="space-y-3">
-                                                    {analysisDetails.engines.map((engine, idx) => (
-                                                        <motion.div
-                                                            key={idx}
-                                                            initial={{ opacity: 0, x: -10 }}
-                                                            animate={{ opacity: 1, x: 0 }}
-                                                            transition={{ delay: idx * 0.05 }}
-                                                            className="bg-background p-4 rounded-lg border border-border flex justify-between items-center hover:border-border/80 transition-colors"
-                                                        >
-                                                            <div className="flex items-center gap-3">
-                                                                <div className={`p-2 rounded-lg ${engine.positives > 0 ? 'bg-red-500/10 text-red-500' : 'bg-green-500/10 text-green-500'}`}>
-                                                                    {engine.positives > 0 ? <AlertOctagon className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />}
-                                                                </div>
-                                                                <div>
-                                                                    <h4 className="text-white font-bold text-sm">{engine.name}</h4>
-                                                                    <p className="text-xs text-gray-500">{engine.status_text || 'Análisis completado'}</p>
-                                                                </div>
-                                                            </div>
-                                                            <div className="text-right">
-                                                                {engine.positives !== undefined ? (
-                                                                    <div className={`text-xs font-mono font-bold px-2 py-1 rounded ${engine.positives > 0 ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
-                                                                        {engine.positives} / {engine.total}
+                                                    {analysisDetails.engines && analysisDetails.engines.length > 0 ? (
+                                                        <div className="space-y-3">
+                                                            {analysisDetails.engines.map((engine, idx) => (
+                                                                <motion.div
+                                                                    key={idx}
+                                                                    initial={{ opacity: 0, x: -10 }}
+                                                                    animate={{ opacity: 1, x: 0 }}
+                                                                    transition={{ delay: idx * 0.05 }}
+                                                                    className="bg-background p-4 rounded-lg border border-border flex justify-between items-center hover:border-border/80 transition-colors"
+                                                                >
+                                                                    <div className="flex items-center gap-3">
+                                                                        <div className={`p-2 rounded-lg ${engine.warning ? 'bg-yellow-500/10 text-yellow-500' : (engine.positives > 0 || engine.alert || engine.detected ? 'bg-red-500/10 text-red-500' : (isHeuristicThreat ? 'bg-gray-500/10 text-gray-500' : 'bg-green-500/10 text-green-500'))}`}>
+                                                                            {engine.warning ? <AlertTriangle className="w-5 h-5" /> : (engine.positives > 0 || engine.alert || engine.detected ? <AlertOctagon className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />)}
+                                                                        </div>
+                                                                        <div>
+                                                                            <h4 className="text-white font-bold text-sm">{engine.name}</h4>
+                                                                            <p className="text-xs text-gray-500">{engine.status_text || 'Análisis completado'}</p>
+                                                                        </div>
                                                                     </div>
-                                                                ) : (
-                                                                    <div className={`text-xs font-bold px-2 py-1 rounded ${engine.alert ? 'bg-red-500/10 text-red-400' : 'bg-green-500/10 text-green-400'}`}>
-                                                                        {engine.alert ? 'DETECTADO' : 'LIMPIO'}
+                                                                    <div className="text-right">
+                                                                        {engine.positives !== undefined ? (
+                                                                            <div className={`text-xs font-mono font-bold px-2 py-1 rounded ${engine.positives > 0 ? 'bg-red-500/10 text-red-400' : (isHeuristicThreat ? 'bg-gray-500/10 text-gray-400' : 'bg-green-500/10 text-green-400')}`}>
+                                                                                {engine.positives} / {engine.total}
+                                                                            </div>
+                                                                        ) : (
+                                                                            <div className={`text-xs font-bold px-2 py-1 rounded ${engine.warning ? 'bg-yellow-500/10 text-yellow-400' : (engine.alert || engine.detected ? 'bg-red-500/10 text-red-400' : (isHeuristicThreat && engine.name !== 'Clasificador Heurístico' ? 'bg-gray-500/10 text-gray-400 italic' : 'bg-green-500/10 text-green-400'))}`}>
+                                                                                {engine.warning ? 'PRECAUCIÓN' : (engine.alert || engine.detected ? 'DETECTADO' : 'LIMPIO')}
+                                                                            </div>
+                                                                        )}
+                                                                        {engine.link && engine.link !== '#' && !(incident.incident_type === 'url' && engine.name === 'MetaDefender') && (
+                                                                            <a href={engine.link} target="_blank" rel="noreferrer" className="text-primary hover:text-white text-xs mt-1 block transition-colors">
+                                                                                Ver Reporte
+                                                                            </a>
+                                                                        )}
                                                                     </div>
-                                                                )}
-                                                                {engine.link && engine.link !== '#' && !(incident.incident_type === 'url' && engine.name === 'MetaDefender') && (
-                                                                    <a href={engine.link} target="_blank" rel="noreferrer" className="text-primary hover:text-white text-xs mt-1 block transition-colors">
-                                                                        Ver Reporte
-                                                                    </a>
-                                                                )}
-                                                            </div>
-                                                        </motion.div>
-                                                    ))}
+                                                                </motion.div>
+                                                            ))}
+                                                        </div>
+                                                    ) : (
+                                                        <div className="text-center py-8 text-gray-500 border border-dashed border-gray-700 rounded-lg">
+                                                            Sin datos de motores disponibles
+                                                        </div>
+                                                    )}
                                                 </div>
-                                            ) : (
-                                                <div className="text-center py-8 text-gray-500 border border-dashed border-gray-700 rounded-lg">
-                                                    Sin datos de motores disponibles
-                                                </div>
-                                            )}
-                                        </div>
-                                    </>
+                                            </>
+                                        );
+                                    })()
                                 ) : (
                                     <div className="p-8 text-center bg-red-500/10 border border-red-500/20 rounded-xl">
                                         <p className="text-red-400 font-bold">Error al cargar datos</p>

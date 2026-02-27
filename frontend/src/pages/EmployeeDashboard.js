@@ -3,7 +3,7 @@ import axios from 'axios';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Shield, Link, FileText, Upload, X, CheckCircle,
-  AlertTriangle, AlertOctagon, Info, ArrowRight, Loader2, LogOut
+  AlertTriangle, AlertOctagon, Info, ArrowRight, Loader2, LogOut, ShieldAlert
 } from 'lucide-react';
 import { GeminiLogo, VirusTotalLogo, MetaDefenderLogo } from '../components/BrandLogos';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
@@ -206,11 +206,20 @@ const EmployeeDashboard = () => {
   };
 
   // Helper calculation for Chart
+  const isHeuristicThreat = analysisResult?.engines?.find(e => e.name === 'Clasificador Heurístico')?.detected === true;
+
   const getChartData = () => {
     if (!analysisResult) return [];
     const positives = analysisResult.positives || analysisResult.total_positives || 0;
     const total = analysisResult.total || analysisResult.total_engines || 1; // avoid div 0
     const clean = Math.max(0, total - positives);
+
+    if (isHeuristicThreat) {
+      return [
+        { name: 'Malicioso', value: positives, color: '#ef4444' }, // Red-500
+        { name: 'Evasión', value: clean, color: '#4b5563' } // Gray-600 pattern for bypassed
+      ];
+    }
 
     return [
       { name: 'Malicioso', value: positives, color: '#ef4444' }, // Red-500
@@ -449,131 +458,146 @@ const EmployeeDashboard = () => {
                 animate="visible"
                 className="space-y-6"
               >
-                {/* Risk Card */}
-                <motion.div
-                  variants={cardVariants}
-                  className={`relative overflow-hidden rounded-2xl border p-1 text-center ${analysisResult.risk_level === 'CRITICAL' || analysisResult.risk_level === 'HIGH' ? 'bg-danger/10 border-danger text-danger' :
-                    analysisResult.risk_level === 'MEDIUM' || analysisResult.risk_level === 'CAUTION' ? 'bg-warning/10 border-warning text-warning' :
-                      'bg-success/10 border-success text-success'
-                    }`}
-                >
-                  <div className="flex flex-col items-center p-6">
-                    {/* CHART VISUALIZATION */}
-                    <div className="w-40 h-40 mb-4 relative">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <PieChart>
-                          <Pie
-                            data={chartData}
-                            innerRadius={60}
-                            outerRadius={75}
-                            paddingAngle={5}
-                            dataKey="value"
-                            stroke="none"
-                          >
-                            {chartData.map((entry, index) => (
-                              <Cell key={`cell-${index}`} fill={entry.color} />
-                            ))}
-                          </Pie>
-                          <Tooltip
-                            contentStyle={{ backgroundColor: '#1a1b26', borderColor: '#2f334d', color: '#fff' }}
-                            itemStyle={{ color: '#fff' }}
-                          />
-                        </PieChart>
-                      </ResponsiveContainer>
+                {/* Heuristic Detection Flag */}
+                {(() => {
+                  return (
+                    <>
+                      {/* Risk Card */}
+                      <motion.div
+                        variants={cardVariants}
+                        className={`relative overflow-hidden rounded-2xl border p-1 text-center ${analysisResult.risk_level === 'CRITICAL' || analysisResult.risk_level === 'HIGH' ? 'bg-danger/10 border-danger text-danger' :
+                          analysisResult.risk_level === 'MEDIUM' || analysisResult.risk_level === 'CAUTION' ? 'bg-warning/10 border-warning text-warning' :
+                            'bg-success/10 border-success text-success'
+                          }`}
+                      >
+                        <div className="flex flex-col items-center p-6">
+                          {/* CHART VISUALIZATION */}
+                          <div className="w-40 h-40 mb-4 relative">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <PieChart>
+                                <Pie
+                                  data={chartData}
+                                  innerRadius={60}
+                                  outerRadius={75}
+                                  paddingAngle={5}
+                                  dataKey="value"
+                                  stroke="none"
+                                >
+                                  {chartData.map((entry, index) => (
+                                    <Cell key={`cell-${index}`} fill={entry.color} />
+                                  ))}
+                                </Pie>
+                                <Tooltip
+                                  contentStyle={{ backgroundColor: '#1a1b26', borderColor: '#2f334d', color: '#fff' }}
+                                  itemStyle={{ color: '#fff' }}
+                                />
+                              </PieChart>
+                            </ResponsiveContainer>
 
-                      <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-                        <span className={`text-2xl font-bold ${analysisResult.risk_level === 'CRITICAL' ? 'text-danger' :
-                          analysisResult.risk_level === 'LOW' ? 'text-success' : 'text-warning'
-                          }`}>
-                          {positivesCount}/{totalCount}
-                        </span>
-                        <span className="text-xs text-gray-500 uppercase tracking-widest mt-1">Detecciones</span>
-                      </div>
-                    </div>
+                            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                              <span className={`text-2xl font-bold ${analysisResult.risk_level === 'CRITICAL' ? 'text-danger' :
+                                analysisResult.risk_level === 'LOW' ? 'text-success' : 'text-warning'
+                                }`}>
+                                {positivesCount}/{totalCount}
+                              </span>
+                              <span className="text-xs text-gray-500 uppercase tracking-widest mt-1">Detecciones</span>
+                            </div>
+                          </div>
 
-                    <h2 className="text-3xl font-black tracking-tight mb-2">
-                      {analysisResult.risk_level === 'LOW' ? 'SEGURO' :
-                        analysisResult.risk_level === 'CRITICAL' ? 'PELIGROSO' :
-                          'PRECAUCIÓN'}
-                    </h2>
-                    <p className="font-medium opacity-90 text-lg">
-                      {analysisResult.message || "Análisis Completado"}
-                    </p>
-                  </div>
-                </motion.div>
-
-                {/* Gemini Analysis */}
-                <div className="bg-background rounded-xl p-6 border border-border">
-                  <div className="flex items-center gap-2 mb-4">
-                    <GeminiLogo className="w-5 h-5" />
-                    <h3 className="text-white font-bold">Análisis Inteligente</h3>
-                  </div>
-                  <p className="text-gray-300 leading-relaxed font-light">
-                    {typwriterText}
-                    <motion.span
-                      animate={{ opacity: [0, 1, 0] }}
-                      transition={{ repeat: Infinity, duration: 0.8 }}
-                      className="inline-block w-1.5 h-4 ml-1 bg-primary align-middle"
-                    />
-                  </p>
-                </div>
-
-                {/* Engines Detail */}
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between mb-2">
-                    <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Detalle por Motores</h3>
-                  </div>
-
-                  {analysisResult.engines?.map((engine, idx) => (
-                    <motion.div
-                      key={idx}
-                      initial={{ opacity: 0, x: 20 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: idx * 0.1 }}
-                      className="bg-background rounded-lg p-4 border border-border flex items-center justify-between group hover:border-primary/50 transition-colors"
-                    >
-                      <div className="flex items-center gap-3">
-                        {engine.name === 'VirusTotal' ? <VirusTotalLogo className="w-8 h-8" /> :
-                          engine.name === 'MetaDefender' ? <MetaDefenderLogo className="w-8 h-8" /> :
-                            <Shield className="w-8 h-8 text-gray-600" />}
-
-                        <div>
-                          <p className="text-white font-medium">{engine.name}</p>
-                          <p className={`text-xs font-bold ${engine.detected || (engine.positives > 0) ? 'text-danger' : 'text-success'
-                            }`}>
-                            {engine.detected || (engine.positives > 0) ? 'Amenaza Detectada' : 'Limpio'}
+                          <h2 className="text-3xl font-black tracking-tight mb-2">
+                            {analysisResult.risk_level === 'LOW' ? 'SEGURO' :
+                              analysisResult.risk_level === 'CRITICAL' ? 'PELIGROSO' :
+                                'PRECAUCIÓN'}
+                          </h2>
+                          <p className="font-medium opacity-90 text-lg">
+                            {analysisResult.message || "Análisis Completado"}
                           </p>
-                          {/* Show x/x for engines that support it */}
-                          {(engine.total > 0) && (
-                            <p className="text-xs text-gray-500 mt-0.5">
-                              {engine.positives}/{engine.total} motores
-                            </p>
-                          )}
                         </div>
+                      </motion.div>
+
+                      {/* Gemini Analysis */}
+                      <div className={`bg-background rounded-xl p-6 border transition-all duration-500 ${isHeuristicThreat ? 'border-danger/80 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'border-border'}`}>
+                        <div className="flex items-center gap-2 mb-4">
+                          <GeminiLogo className={`w-5 h-5 ${isHeuristicThreat ? 'text-danger animate-pulse' : ''}`} />
+                          <h3 className="text-white font-bold flex items-center gap-2">
+                            Análisis Inteligente
+                            {isHeuristicThreat && (
+                              <span className="text-[11px] bg-danger/20 text-danger border border-danger/40 px-3 py-1 rounded-full font-black tracking-wider uppercase flex items-center gap-1">
+                                <ShieldAlert className="w-3 h-3" /> NO ABRIR: PHISHING DETECTADO POR IA
+                              </span>
+                            )}
+                          </h3>
+                        </div>
+                        <p className="text-gray-300 leading-relaxed font-light">
+                          {typwriterText}
+                          <motion.span
+                            animate={{ opacity: [0, 1, 0] }}
+                            transition={{ repeat: Infinity, duration: 0.8 }}
+                            className="inline-block w-1.5 h-4 ml-1 bg-primary align-middle"
+                          />
+                        </p>
                       </div>
 
-                      {engine.link && !(analysisType === 'url' && engine.name === 'MetaDefender') && (
-                        <a
-                          href={engine.link}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="text-gray-500 hover:text-primary transition-colors"
-                        >
-                          <ArrowRight className="w-5 h-5" />
-                        </a>
-                      )}
-                    </motion.div>
-                  ))}
-                </div>
+                      {/* Engines Detail */}
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <h3 className="text-sm font-bold text-gray-500 uppercase tracking-wider">Detalle por Motores</h3>
+                        </div>
+
+                        {
+                          analysisResult.engines?.map((engine, idx) => (
+                            <motion.div
+                              key={idx}
+                              initial={{ opacity: 0, x: 20 }}
+                              animate={{ opacity: 1, x: 0 }}
+                              transition={{ delay: idx * 0.1 }}
+                              className="bg-background rounded-lg p-4 border border-border flex items-center justify-between group hover:border-primary/50 transition-colors"
+                            >
+                              <div className="flex items-center gap-3">
+                                {engine.name === 'VirusTotal' ? <VirusTotalLogo className="w-8 h-8" /> :
+                                  engine.name === 'MetaDefender' ? <MetaDefenderLogo className="w-8 h-8" /> :
+                                    <Shield className="w-8 h-8 text-gray-600" />}
+
+                                <div>
+                                  <p className="text-white font-medium">{engine.name}</p>
+                                  <p className={`text-xs font-bold ${engine.warning ? 'text-warning' : (engine.detected || (engine.positives > 0) ? 'text-danger' : (isHeuristicThreat ? 'text-gray-500 italic' : 'text-success'))}`}>
+                                    {engine.warning ? 'Precaución' : (engine.detected || (engine.positives > 0) ? 'Amenaza Detectada' : 'Limpio')}
+                                  </p>
+                                  {/* Show x/x for engines that support it */}
+                                  {(engine.total > 0) && (
+                                    <p className="text-xs text-gray-500 mt-0.5">
+                                      {engine.positives}/{engine.total} motores
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+
+                              {engine.link && engine.link !== '#' && !(analysisType === 'url' && engine.name === 'MetaDefender') && (
+                                <a
+                                  href={engine.link}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="text-gray-500 hover:text-primary transition-colors"
+                                >
+                                  <ArrowRight className="w-5 h-5" />
+                                </a>
+                              )}
+                            </motion.div>
+                          ))
+                        }
+                      </div>
+                    </>
+                  );
+                })()}
               </motion.div>
             )}
           </AnimatePresence>
 
         </div>
-      </div>
+      </div >
 
       {/* SUCCESS TOAST NOTIFICATION */}
-      <AnimatePresence>
+      < AnimatePresence >
         {showSuccess && (
           <motion.div
             initial={{ opacity: 0, y: -50, x: '-50%' }}
@@ -593,10 +617,10 @@ const EmployeeDashboard = () => {
             </button>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence >
 
       {/* ERROR TOAST NOTIFICATION */}
-      <AnimatePresence>
+      < AnimatePresence >
         {showError && (
           <motion.div
             initial={{ opacity: 0, y: -50, x: '-50%' }}
@@ -616,9 +640,9 @@ const EmployeeDashboard = () => {
             </button>
           </motion.div>
         )}
-      </AnimatePresence>
+      </AnimatePresence >
 
-    </div>
+    </div >
   );
 };
 

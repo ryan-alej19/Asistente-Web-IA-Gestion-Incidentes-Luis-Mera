@@ -223,7 +223,9 @@ def analyze_file_preview(request):
         if total_engines > 0:
             risk_score = (total_positives / total_engines) * 100
             
-            if risk_score > 70: risk = 'CRITICAL'
+            if heuristic_result.get('heuristic_alert', False):
+                risk = 'CRITICAL'
+            elif risk_score > 70: risk = 'CRITICAL'
             elif risk_score > 40: risk = 'HIGH'
             elif risk_score > 10: risk = 'MEDIUM'
             elif risk_score > 0: risk = 'LOW'
@@ -396,15 +398,16 @@ def analyze_url_preview(request):
             gsb_res = gsb_service.check_url(url)
             # Aceptamos si tiene 'safe' o si 'matches' (dependiendo de implementacion interna, asumimos dict)
             is_safe = gsb_res.get('safe', True)
+            is_warning = gsb_res.get('warning', False)
             
             engines_list.append({
                 'name': 'Google Safe Browsing',
-                'detected': not is_safe,
-                'status_text': 'Seguro' if is_safe else 'Peligroso',
-                'status_text': 'Seguro' if is_safe else 'Peligroso',
+                'detected': not is_safe and not is_warning,
+                'warning': is_warning,
+                'status_text': 'Precaución' if is_warning else ('Seguro' if is_safe else 'Peligroso'),
                 'link': f"https://transparencyreport.google.com/safe-browsing/search?url={url}"
             })
-            if not is_safe:
+            if not is_safe and not is_warning:
                 max_positives = max(max_positives, 1)
                 
         except Exception as e:
@@ -435,8 +438,10 @@ def analyze_url_preview(request):
         if not engines_list:
             return Response({'error': 'Todos los motores fallaron'}, status=503)
             
+        heuristic_detected = any(e['name'] == 'Clasificador Heurístico' and e.get('detected', False) for e in engines_list)
+
         # Riesgo
-        if max_positives > 5:
+        if max_positives > 5 or heuristic_detected:
             risk = 'CRITICAL'
             message = 'URL peligrosa'
         elif max_positives > 0:

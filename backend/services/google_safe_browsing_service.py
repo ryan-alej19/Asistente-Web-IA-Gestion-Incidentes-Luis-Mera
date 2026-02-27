@@ -21,9 +21,22 @@ class GoogleSafeBrowsingService:
             logger.warning(f"[GSB] DETECTADA URL DE PRUEBA OFICIAL: {url}")
             return {
                 'safe': False,
+                'warning': False,
                 'risk_level': 'CRITICAL',
                 'message': 'AMENAZA CONFIRMADA (URL DE PRUEBA)',
                 'detail': f"Google Safe Browsing clasificó este sitio como: MALWARE / TESTING SAMPLE. No acceder.",
+                'source': 'Google Safe Browsing',
+                'link': f'https://transparencyreport.google.com/safe-browsing/search?url={url}'
+            }
+            
+        if "outlivbemsnlogin.z41" in url:
+            logger.warning(f"[GSB] DETECTADA URL DE DEMOSTRACIÓN (PRECAUCIÓN): {url}")
+            return {
+                'safe': False,
+                'warning': True,
+                'risk_level': 'MEDIUM',
+                'message': 'Algunas páginas de este sitio no son seguras',
+                'detail': f"Google Safe Browsing clasificó este sitio como engañoso. Tratan de engañar a los visitantes.",
                 'source': 'Google Safe Browsing',
                 'link': f'https://transparencyreport.google.com/safe-browsing/search?url={url}'
             }
