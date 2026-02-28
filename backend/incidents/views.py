@@ -1491,7 +1491,7 @@ def generate_pdf_report(request, incident_id=None):
                     logger.warning(f"Error drawing monthly logo: {e}")
 
             p.setFont("Helvetica-Bold", 16)
-            p.drawRightString(550, h - 50, "REPORTE GENERAL DE INCIDENTES - v1.3.0")
+            p.drawRightString(550, h - 50, "REPORTE GENERAL DE INCIDENTES - v1.3.1")
             p.setFont("Helvetica-Bold", 12)
             p.drawRightString(550, h - 70, f"Fecha Emisión: {now.strftime('%Y-%m-%d')}")
             

@@ -6,6 +6,8 @@ from django.http import HttpResponse
 from incidents.views import health_check
 from django.conf import settings
 from django.conf.urls.static import static
+from django.urls import re_path
+from django.views.static import serve
 
 def root_view(request):
     return HttpResponse("Backend incident system running. Go to /admin or /api/...", status=200)
@@ -17,6 +19,7 @@ urlpatterns = [
     path('api/health/', health_check, name='health_check'),
     path('api/users/', include('users.urls')),
     path('', root_view),
+    re_path(r'^media/(?P<path>.*)$', serve, {'document_root': settings.MEDIA_ROOT}),
 ]
 
 if settings.DEBUG:

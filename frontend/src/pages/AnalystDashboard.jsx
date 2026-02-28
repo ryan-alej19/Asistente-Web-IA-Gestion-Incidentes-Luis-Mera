@@ -216,12 +216,7 @@ const AnalystDashboard = () => {
                             </div>
                         </div>
                         <div>
-                            <h1 className="text-white font-bold text-xl leading-none tracking-tight flex items-center gap-2">
-                                Centro<span className="text-primary">SOC</span>
-                                <span className="text-[9px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full font-bold">
-                                    v1.3.0
-                                </span>
-                            </h1>
+                            <h1 className="text-white font-bold text-xl leading-none tracking-tight">Centro<span className="text-primary">SOC</span></h1>
                             <p className="text-gray-500 text-xs font-medium tracking-widest uppercase mt-1">Talleres Luis Mera</p>
                         </div>
                     </div>
@@ -264,7 +259,7 @@ const AnalystDashboard = () => {
                         <LogOut className="w-5 h-5 group-hover:text-danger transition-colors" />
                         <span>Cerrar Sesión</span>
                     </button>
-                    <p className="text-center text-gray-600 text-[10px] mt-4 font-mono">v.1.2.0</p>
+                    <p className="text-center text-gray-600 text-[10px] mt-4 font-mono">v.1.3.1 Analyst</p>
                 </div>
             </aside>
 

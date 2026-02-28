@@ -279,9 +279,6 @@ const EmployeeDashboard = () => {
               <div>
                 <h1 className="text-2xl font-bold text-white flex items-center gap-3 tracking-tight">
                   Centro de Seguridad
-                  <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 rounded-full font-bold">
-                    v1.3.0
-                  </span>
                 </h1>
                 <p className="text-secondary text-sm font-medium">
                   Talleres Luis Mera - Software Protegido
