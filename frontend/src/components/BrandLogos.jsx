@@ -1,18 +1,13 @@
 import React from 'react';
 
 export const GeminiLogo = ({ className = "w-6 h-6" }) => (
-    <svg className={className} viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M23.0805 1.5839C22.6185 8.1691 19.8665 14.242 13.9113 14.505C19.9272 14.8809 22.8447 20.3547 23.0039 26.2482C23.637 19.9077 27.2458 14.7712 32.7482 14.5806C26.5414 14.2882 23.5932 8.52841 23.0805 1.5839Z" fill="url(#gemini-gradient-1)" transform="translate(-5)" />
-        <path d="M7.71261 4.75703C7.45899 8.35624 5.94998 11.6738 2.69344 11.8175C5.98317 12.0229 7.57795 15.0135 7.66497 18.2335C8.01099 14.7699 9.98312 11.963 12.9912 11.8588C9.59832 11.6991 7.9897 8.5526 7.71261 4.75703Z" fill="url(#gemini-gradient-2)" transform="translate(0 3)" />
+    <svg className={className} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <path d="M12 24C12 17.3726 6.62742 12 0 12C6.62742 12 12 6.62742 12 0C12 6.62742 17.3726 12 24 12C17.3726 12 12 17.3726 12 24Z" fill="url(#gemini-gradient-main)" />
         <defs>
-            <linearGradient id="gemini-gradient-1" x1="13.9113" y1="1.5839" x2="32.7482" y2="26.2482" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#1AA6DE" />
-                <stop offset="0.4" stopColor="#6C6CFF" />
-                <stop offset="1" stopColor="#FF6C6C" />
-            </linearGradient>
-            <linearGradient id="gemini-gradient-2" x1="2.69344" y1="4.75703" x2="12.9912" y2="18.2335" gradientUnits="userSpaceOnUse">
-                <stop stopColor="#1AA6DE" />
-                <stop offset="1" stopColor="#FF6C6C" />
+            <linearGradient id="gemini-gradient-main" x1="0" y1="12" x2="24" y2="12" gradientUnits="userSpaceOnUse">
+                <stop stopColor="#4A90E2" />
+                <stop offset="0.5" stopColor="#A865C9" />
+                <stop offset="1" stopColor="#FF7B7B" />
             </linearGradient>
         </defs>
     </svg>

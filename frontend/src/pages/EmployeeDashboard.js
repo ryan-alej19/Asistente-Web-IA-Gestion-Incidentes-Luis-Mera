@@ -42,6 +42,13 @@ const EmployeeDashboard = () => {
       const file = e.target.files[0];
       setAttachedFile(file);
       setAnalysisResult(null); // Resetea resultados anteriores
+
+      // Auto-detect image
+      if (file.type.startsWith('image/')) {
+        setAnalysisType('image');
+      } else {
+        setAnalysisType('file');
+      }
     }
   };
 
@@ -62,6 +69,13 @@ const EmployeeDashboard = () => {
       const file = e.dataTransfer.files[0];
       setAttachedFile(file);
       setAnalysisResult(null); // Resetea resultados anteriores
+
+      // Auto-detect image
+      if (file.type.startsWith('image/')) {
+        setAnalysisType('image');
+      } else {
+        setAnalysisType('file');
+      }
     }
   };
 
@@ -98,7 +112,7 @@ const EmployeeDashboard = () => {
 
   const handleAnalyze = async () => {
     if (analysisType === 'url' && !url) return;
-    if (analysisType === 'file' && !attachedFile) return;
+    if ((analysisType === 'file' || analysisType === 'image') && !attachedFile) return;
 
     setAnalyzing(true);
     setAnalysisResult(null);
@@ -110,10 +124,14 @@ const EmployeeDashboard = () => {
       let res;
       if (analysisType === 'url') {
         res = await axios.post(`${API_URL}/api/incidents/analyze-url-preview/`, { url }, config);
-      } else {
+      } else if (analysisType === 'file') {
         const formData = new FormData();
         formData.append('file', attachedFile);
         res = await axios.post(`${API_URL}/api/incidents/analyze-file-preview/`, formData, config);
+      } else if (analysisType === 'image') {
+        const formData = new FormData();
+        formData.append('file', attachedFile);
+        res = await axios.post(`${API_URL}/api/incidents/analyze-image-preview/`, formData, config);
       }
       setAnalysisResult(res.data);
     } catch (err) {
@@ -126,16 +144,18 @@ const EmployeeDashboard = () => {
 
   // Typewriter Effect for Gemini Explanation
   useEffect(() => {
-    if (analysisResult?.gemini_result?.explicacion || analysisResult?.gemini_explicacion) {
-      const text = analysisResult.gemini_explicacion || analysisResult.gemini_result.explicacion;
+    if (analysisResult?.gemini_result?.explicacion || analysisResult?.gemini_explicacion || analysisResult?.gemini_explanation) {
+      const text = analysisResult.gemini_explanation || analysisResult.gemini_explicacion || analysisResult.gemini_result?.explicacion;
       if (!text) return;
       let i = 0;
-      const speed = 15; // ms per char
+      const speed = 5; // ms per tick
+      const chunkSize = 5; // chars per tick
 
       const type = () => {
         if (i < text.length) {
-          setTypewriterText((prev) => text.substring(0, i + 1));
-          i++;
+          const nextI = Math.min(i + chunkSize, text.length);
+          setTypewriterText((prev) => text.substring(0, nextI));
+          i = nextI;
           setTimeout(type, speed);
         }
       };
@@ -153,15 +173,15 @@ const EmployeeDashboard = () => {
       formData.append('incident_type', analysisType);
       formData.append('description', description);
       if (analysisType === 'url') formData.append('url', url);
-      if (analysisType === 'file') formData.append('file', attachedFile);
+      if (analysisType === 'file' || analysisType === 'image') formData.append('file', attachedFile);
 
       // Enviar el resultado del análisis (snapshot)
       if (analysisResult) {
         const snapshot = {
           engines: analysisResult.engines,
           risk_level: analysisResult.risk_level,
-          gemini_explicacion: analysisResult.gemini_explicacion || (analysisResult.gemini_result?.explicacion),
-          gemini_recomendacion: analysisResult.gemini_recomendacion || (analysisResult.gemini_result?.recomendacion),
+          gemini_explicacion: analysisResult.gemini_explanation || analysisResult.gemini_explicacion || (analysisResult.gemini_result?.explicacion),
+          gemini_recomendacion: analysisResult.gemini_recommendation || analysisResult.gemini_recomendacion || (analysisResult.gemini_result?.recomendacion),
           heuristic: analysisResult.heuristic,
           positives: analysisResult.positives || analysisResult.total_positives,
           total: analysisResult.total || analysisResult.total_engines
@@ -196,8 +216,8 @@ const EmployeeDashboard = () => {
 
   // Variants for Framer Motion
   const containerVariants = {
-    hidden: { opacity: 0, y: 20 },
-    visible: { opacity: 1, y: 0, transition: { duration: 0.5 } }
+    hidden: { opacity: 0, y: 10 },
+    visible: { opacity: 1, y: 0, transition: { duration: 0.2 } }
   };
 
   const cardVariants = {
@@ -206,7 +226,9 @@ const EmployeeDashboard = () => {
   };
 
   // Helper calculation for Chart
-  const isHeuristicThreat = analysisResult?.engines?.find(e => e.name === 'Clasificador Heurístico')?.detected === true;
+  const isAdvancedThreat = analysisResult?.engines?.some(e =>
+    (e.name === 'Clasificador Heurístico' || e.name === 'Inteligencia Artificial (Gemini Vision)') && e.detected
+  ) === true;
 
   const getChartData = () => {
     if (!analysisResult) return [];
@@ -214,7 +236,7 @@ const EmployeeDashboard = () => {
     const total = analysisResult.total || analysisResult.total_engines || 1; // avoid div 0
     const clean = Math.max(0, total - positives);
 
-    if (isHeuristicThreat) {
+    if (isAdvancedThreat) {
       return [
         { name: 'Malicioso', value: positives, color: '#ef4444' }, // Red-500
         { name: 'Evasión', value: clean, color: '#4b5563' } // Gray-600 pattern for bypassed
@@ -257,6 +279,9 @@ const EmployeeDashboard = () => {
               <div>
                 <h1 className="text-2xl font-bold text-white flex items-center gap-3 tracking-tight">
                   Centro de Seguridad
+                  <span className="text-[10px] bg-primary/20 text-primary border border-primary/30 px-2 py-0.5 rounded-full font-bold">
+                    v1.3.0
+                  </span>
                 </h1>
                 <p className="text-secondary text-sm font-medium">
                   Talleres Luis Mera - Software Protegido
@@ -287,13 +312,13 @@ const EmployeeDashboard = () => {
             </button>
             <button
               onClick={() => { setAnalysisType('file'); setAnalysisResult(null); }}
-              className={`flex items-center justify-center gap-3 py-4 rounded-lg font-medium transition-all ${analysisType === 'file'
+              className={`flex items-center justify-center gap-3 py-4 rounded-lg font-medium transition-all ${(analysisType === 'file' || analysisType === 'image')
                 ? 'bg-primary text-white shadow-lg shadow-primary/20'
                 : 'text-gray-400 hover:text-white hover:bg-white/5'
                 }`}
             >
               <FileText className="w-5 h-5" />
-              <span>Analizar Archivo</span>
+              <span>Analizar Archivo / Imagen</span>
             </button>
           </div>
 
@@ -315,18 +340,18 @@ const EmployeeDashboard = () => {
                   className="w-full bg-surface border border-border text-white rounded-xl py-4 px-4 focus:ring-2 focus:ring-primary focus:border-transparent transition-all outline-none text-lg font-mono"
                 />
               </div>
-            ) : (
+            ) : (analysisType === 'file' || analysisType === 'image') ? (
               <div className="relative">
                 {!attachedFile ? (
                   <label
-                    className={`flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-xl cursor-pointer transition-all group ${isDragging ? 'bg-primary/10 border-primary' : 'border-border bg-surface/50 hover:bg-surface hover:border-primary/50'}`}
+                    className={`flex flex-col items-center justify-center w-full h-64 border-2 border-dashed rounded-xl cursor-pointer transition-all duration-300 group ${isDragging ? 'bg-primary/20 border-primary scale-[1.02] shadow-[0_0_30px_rgba(59,130,246,0.3)]' : 'border-border bg-surface/50 hover:bg-surface hover:border-primary/50'}`}
                     onDragOver={handleDragOver}
                     onDragLeave={handleDragLeave}
                     onDrop={handleDrop}
                   >
-                    <Upload className={`w-12 h-12 mb-4 transition-colors ${isDragging ? 'text-primary' : 'text-gray-500 group-hover:text-primary'}`} />
-                    <p className="text-gray-300 font-medium text-lg">Haga clic o arrastre un archivo aquí</p>
-                    <p className="text-gray-500 text-sm mt-2">Soporta PDF, DOCX, EXE, ZIP...</p>
+                    <Upload className={`w-12 h-12 mb-4 transition-all duration-300 ${isDragging ? 'text-primary scale-125 -translate-y-2' : 'text-gray-500 group-hover:text-primary group-hover:-translate-y-1'}`} />
+                    <p className={`font-medium text-lg transition-colors ${isDragging ? 'text-primary' : 'text-gray-300'}`}>Haga clic o arrastre un archivo aquí</p>
+                    <p className="text-gray-500 text-sm mt-2">{analysisType === 'image' ? 'Soporta PNG, JPG, JPEG...' : 'Soporta PDF, DOCX, EXE, ZIP...'}</p>
                     <input type="file" className="hidden" onChange={handleFileChange} />
                   </label>
                 ) : (
@@ -351,7 +376,7 @@ const EmployeeDashboard = () => {
                   </div>
                 )}
               </div>
-            )}
+            ) : null}
           </motion.div>
 
           {/* Action Button */}
@@ -431,7 +456,6 @@ const EmployeeDashboard = () => {
                 key="loading"
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
                 className="flex-1 flex flex-col items-center justify-center text-center opacity-50"
               >
                 <div className="relative w-24 h-24 mb-6">
@@ -505,9 +529,11 @@ const EmployeeDashboard = () => {
                           </div>
 
                           <h2 className="text-3xl font-black tracking-tight mb-2">
-                            {analysisResult.risk_level === 'LOW' ? 'SEGURO' :
-                              analysisResult.risk_level === 'CRITICAL' ? 'PELIGROSO' :
-                                'PRECAUCIÓN'}
+                            {analysisResult.risk_level === 'SAFE' ? 'SEGURO' :
+                              analysisResult.risk_level === 'LOW' ? 'RIESGO MÍNIMO' :
+                                analysisResult.risk_level === 'CRITICAL' ? 'CRÍTICO' :
+                                  analysisResult.risk_level === 'HIGH' ? 'ALTO RIESGO' :
+                                    'PRECAUCIÓN'}
                           </h2>
                           <p className="font-medium opacity-90 text-lg">
                             {analysisResult.message || "Análisis Completado"}
@@ -516,12 +542,19 @@ const EmployeeDashboard = () => {
                       </motion.div>
 
                       {/* Gemini Analysis */}
-                      <div className={`bg-background rounded-xl p-6 border transition-all duration-500 ${isHeuristicThreat ? 'border-danger/80 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'border-border'}`}>
+                      <div className={`bg-background rounded-xl p-6 border transition-all duration-500 ${isAdvancedThreat ? 'border-danger/80 shadow-[0_0_20px_rgba(239,68,68,0.3)]' : 'border-border'}`}>
                         <div className="flex items-center gap-2 mb-4">
-                          <GeminiLogo className={`w-5 h-5 ${isHeuristicThreat ? 'text-danger animate-pulse' : ''}`} />
+                          <GeminiLogo className={`w-5 h-5 ${isAdvancedThreat ? 'text-danger animate-pulse' : ''}`} />
                           <h3 className="text-white font-bold flex items-center gap-2">
                             Análisis Inteligente
-                            {isHeuristicThreat && (
+                            <div className="relative group flex items-center justify-center">
+                              <Info className="w-4 h-4 text-gray-500 hover:text-primary transition-colors cursor-help" />
+                              <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-64 bg-surface border border-border text-gray-300 text-xs rounded-lg p-3 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none text-center">
+                                Motor analítico impulsado por Gemini 2.5 Flash. Es capaz de leer contexto, intenciones y engaños visuales (Zero-Day) en archivos y URLs.
+                                <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-surface drop-shadow-lg"></div>
+                              </div>
+                            </div>
+                            {isAdvancedThreat && (
                               <span className="text-[11px] bg-danger/20 text-danger border border-danger/40 px-3 py-1 rounded-full font-black tracking-wider uppercase flex items-center gap-1">
                                 <ShieldAlert className="w-3 h-3" /> NO ABRIR: PHISHING DETECTADO POR IA
                               </span>
@@ -553,16 +586,46 @@ const EmployeeDashboard = () => {
                               transition={{ delay: idx * 0.1 }}
                               className="bg-background rounded-lg p-4 border border-border flex items-center justify-between group hover:border-primary/50 transition-colors"
                             >
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-3 flex-1">
                                 {engine.name === 'VirusTotal' ? <VirusTotalLogo className="w-8 h-8" /> :
                                   engine.name === 'MetaDefender' ? <MetaDefenderLogo className="w-8 h-8" /> :
                                     <Shield className="w-8 h-8 text-gray-600" />}
 
-                                <div>
-                                  <p className="text-white font-medium">{engine.name}</p>
-                                  <p className={`text-xs font-bold ${engine.warning ? 'text-warning' : (engine.detected || (engine.positives > 0) ? 'text-danger' : (isHeuristicThreat ? 'text-gray-500 italic' : 'text-success'))}`}>
-                                    {engine.warning ? 'Precaución' : (engine.detected || (engine.positives > 0) ? 'Amenaza Detectada' : 'Limpio')}
-                                  </p>
+                                <div className="flex-1 ml-3"> {/* Added flex-1 and ml-3 for spacing */}
+                                  <div className="flex justify-between items-start mb-1 gap-4"> {/* Changed items-center to items-start for multiline text */}
+                                    <span className="text-white font-medium shrink-0 flex items-center gap-1.5 z-10">
+                                      {engine.name}
+                                      {engine.name === 'Clasificador Heurístico' && (
+                                        <div className="relative group flex items-center justify-center">
+                                          <Info className="w-3.5 h-3.5 text-gray-600 hover:text-primary transition-colors cursor-help" />
+                                          <div className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 w-64 bg-surface border border-border text-gray-300 text-xs rounded-lg p-3 shadow-xl opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-200 z-50 pointer-events-none text-center font-normal">
+                                            Algoritmo de Machine Learning local diseñado para detectar patrones anómalos en URLs basado en características como longitud, caracteres especiales y entropía.
+                                            <div className="absolute top-full left-1/2 -translate-x-1/2 border-4 border-transparent border-t-surface drop-shadow-lg"></div>
+                                          </div>
+                                        </div>
+                                      )}
+                                    </span>
+
+                                    <div className="flex items-center gap-2 flex-1 justify-end min-w-0">
+                                      <span className={`text-sm font-bold text-right break-words whitespace-normal leading-tight ${engine.detected || (engine.positives && engine.positives > 0) ? 'text-danger' :
+                                        engine.warning ? 'text-warning' : 'text-success'}`}>
+                                        {engine.status_text ? engine.status_text :
+                                          (engine.detected || (engine.positives && engine.positives > 0) ? 'Amenaza Detectada' :
+                                            engine.warning ? 'Precaución' : 'Limpio')}
+                                      </span>
+
+                                      {engine.link && engine.link !== '#' && !(analysisType === 'url' && engine.name === 'MetaDefender') && (
+                                        <a
+                                          href={engine.link}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="text-gray-500 hover:text-primary transition-colors flex items-center justify-center p-0.5 shrink-0"
+                                        >
+                                          <ArrowRight className="w-4 h-4" />
+                                        </a>
+                                      )}
+                                    </div>
+                                  </div>
                                   {/* Show x/x for engines that support it */}
                                   {(engine.total > 0) && (
                                     <p className="text-xs text-gray-500 mt-0.5">
@@ -571,17 +634,6 @@ const EmployeeDashboard = () => {
                                   )}
                                 </div>
                               </div>
-
-                              {engine.link && engine.link !== '#' && !(analysisType === 'url' && engine.name === 'MetaDefender') && (
-                                <a
-                                  href={engine.link}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="text-gray-500 hover:text-primary transition-colors"
-                                >
-                                  <ArrowRight className="w-5 h-5" />
-                                </a>
-                              )}
                             </motion.div>
                           ))
                         }

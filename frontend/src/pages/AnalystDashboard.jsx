@@ -216,7 +216,12 @@ const AnalystDashboard = () => {
                             </div>
                         </div>
                         <div>
-                            <h1 className="text-white font-bold text-xl leading-none tracking-tight">Centro<span className="text-primary">SOC</span></h1>
+                            <h1 className="text-white font-bold text-xl leading-none tracking-tight flex items-center gap-2">
+                                Centro<span className="text-primary">SOC</span>
+                                <span className="text-[9px] bg-primary/20 text-primary border border-primary/30 px-1.5 py-0.5 rounded-full font-bold">
+                                    v1.3.0
+                                </span>
+                            </h1>
                             <p className="text-gray-500 text-xs font-medium tracking-widest uppercase mt-1">Talleres Luis Mera</p>
                         </div>
                     </div>

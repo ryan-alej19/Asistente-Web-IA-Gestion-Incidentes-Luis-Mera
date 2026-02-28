@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path('analyze-file-preview/', views.analyze_file_preview, name='analyze_file_preview'),
     path('analyze-url-preview/', views.analyze_url_preview, name='analyze_url_preview'),
+    path('analyze-image-preview/', views.analyze_image_preview, name='analyze_image_preview'),
     path('create/', views.create_incident, name='create_incident'),
     path('list/', views.list_incidents, name='list_incidents'),
     path('<int:incident_id>/', views.incident_detail, name='incident_detail'),

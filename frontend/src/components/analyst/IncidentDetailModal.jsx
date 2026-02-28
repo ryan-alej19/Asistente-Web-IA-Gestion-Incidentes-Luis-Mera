@@ -167,233 +167,260 @@ const IncidentDetailModal = ({ incident, onClose, onUpdate }) => {
 
                     {/* Content Area */}
                     <div className="p-6 overflow-y-auto bg-background/50 flex-1">
+                        <AnimatePresence mode="wait">
+                            {/* TAB: INFO */}
+                            {activeTab === 'info' && (
+                                <motion.div
+                                    key="info"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="space-y-6"
+                                >
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div className="bg-surface p-5 rounded-xl border border-border">
+                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 block">Estado Actual</label>
+                                            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-bold border ${incident.status === 'pending' ? 'bg-gray-500/10 text-gray-300 border-gray-500/20' :
+                                                incident.status === 'investigating' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                                    'bg-green-500/10 text-green-400 border-green-500/20'
+                                                }`}>
+                                                {incident.status === 'pending' && <Clock className="w-4 h-4 mr-2" />}
+                                                {incident.status === 'investigating' && <Activity className="w-4 h-4 mr-2" />}
+                                                {incident.status === 'resolved' && <CheckCircle className="w-4 h-4 mr-2" />}
 
-                        {/* TAB: INFO */}
-                        {activeTab === 'info' && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="space-y-6"
-                            >
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <div className="bg-surface p-5 rounded-xl border border-border">
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 block">Estado Actual</label>
-                                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-bold border ${incident.status === 'pending' ? 'bg-gray-500/10 text-gray-300 border-gray-500/20' :
-                                            incident.status === 'investigating' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                                                'bg-green-500/10 text-green-400 border-green-500/20'
-                                            }`}>
-                                            {incident.status === 'pending' && <Clock className="w-4 h-4 mr-2" />}
-                                            {incident.status === 'investigating' && <Activity className="w-4 h-4 mr-2" />}
-                                            {incident.status === 'resolved' && <CheckCircle className="w-4 h-4 mr-2" />}
+                                                {incident.status === 'pending' && 'PENDIENTE'}
+                                                {incident.status === 'investigating' && 'EN REVISIÓN'}
+                                                {incident.status === 'resolved' && 'RESUELTO'}
+                                            </span>
+                                        </div>
+                                        <div className="bg-surface p-5 rounded-xl border border-border">
+                                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 block">Nivel de Riesgo</label>
+                                            <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-bold border ${incident.risk_level === 'CRITICAL' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
+                                                incident.risk_level === 'HIGH' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
+                                                    incident.risk_level === 'MEDIUM' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
+                                                        incident.risk_level === 'LOW' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
+                                                            'bg-green-500/10 text-green-400 border-green-500/20'
+                                                }`}>
+                                                {incident.risk_level === 'CRITICAL' && <ShieldAlert className="w-4 h-4 mr-2" />}
+                                                {incident.risk_level === 'HIGH' && <AlertTriangle className="w-4 h-4 mr-2" />}
+                                                {incident.risk_level === 'MEDIUM' && <AlertCircle className="w-4 h-4 mr-2" />}
+                                                {incident.risk_level === 'LOW' && <ShieldCheck className="w-4 h-4 mr-2" />}
+                                                {incident.risk_level === 'SAFE' && <CheckCircle className="w-4 h-4 mr-2" />}
 
-                                            {incident.status === 'pending' && 'PENDIENTE'}
-                                            {incident.status === 'investigating' && 'EN REVISIÓN'}
-                                            {incident.status === 'resolved' && 'RESUELTO'}
-                                        </span>
+                                                {incident.risk_level === 'CRITICAL' && 'CRÍTICO'}
+                                                {incident.risk_level === 'HIGH' && 'ALTO'}
+                                                {incident.risk_level === 'MEDIUM' && 'MEDIO'}
+                                                {incident.risk_level === 'LOW' && 'BAJO'}
+                                                {incident.risk_level === 'SAFE' && 'SEGURO'}
+                                            </span>
+                                        </div>
                                     </div>
-                                    <div className="bg-surface p-5 rounded-xl border border-border">
-                                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 block">Nivel de Riesgo</label>
-                                        <span className={`inline-flex items-center px-3 py-1.5 rounded-full text-sm font-bold border ${incident.risk_level === 'CRITICAL' ? 'bg-red-500/10 text-red-400 border-red-500/20' :
-                                            incident.risk_level === 'HIGH' ? 'bg-orange-500/10 text-orange-400 border-orange-500/20' :
-                                                incident.risk_level === 'MEDIUM' ? 'bg-yellow-500/10 text-yellow-400 border-yellow-500/20' :
-                                                    incident.risk_level === 'LOW' ? 'bg-blue-500/10 text-blue-400 border-blue-500/20' :
-                                                        'bg-green-500/10 text-green-400 border-green-500/20'
-                                            }`}>
-                                            {incident.risk_level === 'CRITICAL' && <ShieldAlert className="w-4 h-4 mr-2" />}
-                                            {incident.risk_level === 'HIGH' && <AlertTriangle className="w-4 h-4 mr-2" />}
-                                            {incident.risk_level === 'MEDIUM' && <AlertCircle className="w-4 h-4 mr-2" />}
-                                            {incident.risk_level === 'LOW' && <ShieldCheck className="w-4 h-4 mr-2" />}
-                                            {incident.risk_level === 'SAFE' && <CheckCircle className="w-4 h-4 mr-2" />}
 
-                                            {incident.risk_level === 'CRITICAL' && 'CRÍTICO'}
-                                            {incident.risk_level === 'HIGH' && 'ALTO'}
-                                            {incident.risk_level === 'MEDIUM' && 'MEDIO'}
-                                            {incident.risk_level === 'LOW' && 'BAJO'}
-                                            {incident.risk_level === 'SAFE' && 'SEGURO'}
-                                        </span>
+                                    <div className="bg-surface p-6 rounded-xl border border-border">
+                                        <label className="text-xs font-bold text-primary uppercase tracking-wider mb-3 block">Objetivo Analizado</label>
+                                        {incident.incident_type === 'image' && incident.attached_file ? (
+                                            <div className="flex flex-col gap-4 mt-2">
+                                                <p className="font-mono text-gray-400 text-xs truncate break-all">{incident.attached_file.split('/').pop()}</p>
+                                                <div className="bg-background/80 rounded-xl border border-border overflow-hidden flex justify-center p-2">
+                                                    <img
+                                                        src={
+                                                            incident.attached_file.startsWith('http')
+                                                                ? incident.attached_file
+                                                                : `${API_URL}${incident.attached_file.startsWith('/media') ? incident.attached_file : '/media/' + (incident.attached_file.startsWith('/') ? incident.attached_file.slice(1) : incident.attached_file)}`
+                                                        }
+                                                        alt="Captura Analizada"
+                                                        className="max-h-[60vh] object-contain rounded border border-gray-700 shadow-xl"
+                                                    />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center bg-background p-4 rounded-lg border border-border font-mono text-gray-200 text-sm break-all">
+                                                {incident.incident_type === 'url' ? incident.url : (incident.attached_file ? incident.attached_file.split('/').pop() : 'Archivo adjunto')}
+                                            </div>
+                                        )}
                                     </div>
-                                </div>
 
-                                <div className="bg-surface p-6 rounded-xl border border-border">
-                                    <label className="text-xs font-bold text-primary uppercase tracking-wider mb-3 block">Objetivo Analizado</label>
-                                    <div className="flex items-center bg-background p-4 rounded-lg border border-border font-mono text-gray-200 text-sm break-all">
-                                        {incident.incident_type === 'url' ? incident.url : (incident.attached_file ? incident.attached_file.split('/').pop() : 'Archivo adjunto')}
+                                    <div className="bg-surface p-6 rounded-xl border border-border">
+                                        <label className="text-xs font-bold text-primary uppercase tracking-wider mb-3 block">Descripción del Usuario</label>
+                                        <p className="text-gray-300 leading-relaxed italic border-l-2 border-border pl-4">
+                                            "{incident.description || 'Sin descripción'}"
+                                        </p>
                                     </div>
-                                </div>
+                                </motion.div>
+                            )}
 
-                                <div className="bg-surface p-6 rounded-xl border border-border">
-                                    <label className="text-xs font-bold text-primary uppercase tracking-wider mb-3 block">Descripción del Usuario</label>
-                                    <p className="text-gray-300 leading-relaxed italic border-l-2 border-border pl-4">
-                                        "{incident.description || 'Sin descripción'}"
-                                    </p>
-                                </div>
-                            </motion.div>
-                        )}
+                            {/* TAB: ANALYSIS */}
+                            {activeTab === 'analysis' && (
+                                <motion.div
+                                    key="analysis"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="space-y-6"
+                                >
+                                    {loadingAnalysis ? (
+                                        <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                                            <Activity className="w-10 h-10 animate-spin text-primary mb-4" />
+                                            <p>Conectando con servicios de inteligencia...</p>
+                                        </div>
+                                    ) : analysisDetails ? (
+                                        (() => {
+                                            const heuristicEngine = analysisDetails.engines?.find(e => e.name === 'Clasificador Heurístico');
+                                            const isHeuristicThreat = heuristicEngine?.detected === true || heuristicEngine?.alert === true;
 
-                        {/* TAB: ANALYSIS */}
-                        {activeTab === 'analysis' && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="space-y-6"
-                            >
-                                {loadingAnalysis ? (
-                                    <div className="flex flex-col items-center justify-center py-20 text-gray-500">
-                                        <Activity className="w-10 h-10 animate-spin text-primary mb-4" />
-                                        <p>Conectando con servicios de inteligencia...</p>
-                                    </div>
-                                ) : analysisDetails ? (
-                                    (() => {
-                                        const heuristicEngine = analysisDetails.engines?.find(e => e.name === 'Clasificador Heurístico');
-                                        const isHeuristicThreat = heuristicEngine?.detected === true || heuristicEngine?.alert === true;
-
-                                        return (
-                                            <>
-                                                {/* Gemini */}
-                                                <div className="bg-surface rounded-xl border border-border overflow-hidden">
-                                                    <div className="bg-gradient-to-r from-blue-900/10 to-purple-900/10 p-4 border-b border-border flex items-center gap-3">
-                                                        <GeminiLogo className="w-6 h-6" />
-                                                        <h3 className="text-white font-bold">Análisis Inteligente (Gemini AI)</h3>
-                                                    </div>
-                                                    <div className="p-6">
-                                                        <div className="mb-6">
-                                                            <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-3">Explicación de la Amenaza</h4>
-                                                            <div className="text-gray-300 leading-relaxed text-sm whitespace-pre-wrap pl-4 border-l-2 border-primary/30">
-                                                                {analysisDetails.gemini_explicacion || "Análisis no disponible."}
-                                                            </div>
+                                            return (
+                                                <>
+                                                    {/* Gemini */}
+                                                    <div className="bg-surface rounded-xl border border-border overflow-hidden">
+                                                        <div className="bg-gradient-to-r from-blue-900/10 to-purple-900/10 p-4 border-b border-border flex items-center gap-3">
+                                                            <GeminiLogo className="w-6 h-6" />
+                                                            <h3 className="text-white font-bold">Análisis Inteligente (Gemini AI)</h3>
                                                         </div>
-                                                        {analysisDetails.gemini_recomendacion && (
-                                                            <div className="bg-blue-500/5 p-4 rounded-lg border border-blue-500/10">
-                                                                <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Recomendación de Seguridad</h4>
-                                                                <p className="text-white text-sm font-medium">{analysisDetails.gemini_recomendacion}</p>
+                                                        <div className="p-6">
+                                                            <div className="mb-6">
+                                                                <h4 className="text-xs font-bold text-primary uppercase tracking-wider mb-3">Explicación de la Amenaza</h4>
+                                                                <div className="text-gray-300 leading-relaxed text-sm whitespace-pre-wrap pl-4 border-l-2 border-primary/30">
+                                                                    {analysisDetails.gemini_explicacion || "Análisis no disponible."}
+                                                                </div>
+                                                            </div>
+                                                            {analysisDetails.gemini_recomendacion && (
+                                                                <div className="bg-blue-500/5 p-4 rounded-lg border border-blue-500/10">
+                                                                    <h4 className="text-xs font-bold text-blue-400 uppercase tracking-wider mb-2">Recomendación de Seguridad</h4>
+                                                                    <p className="text-white text-sm font-medium">{analysisDetails.gemini_recomendacion}</p>
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    {/* Engines */}
+                                                    <div className="bg-surface rounded-xl border border-border p-6">
+                                                        <div className="flex items-center justify-between mb-6">
+                                                            <h3 className="text-white font-bold flex items-center gap-2">
+                                                                <ShieldCheck className="w-5 h-5 text-primary" />
+                                                                Motores de Seguridad
+                                                            </h3>
+                                                            <span className="text-xs text-gray-500 font-bold bg-white/5 px-2 py-1 rounded">
+                                                                Resultados en Tiempo Real
+                                                            </span>
+                                                        </div>
+
+                                                        {analysisDetails.engines && analysisDetails.engines.length > 0 ? (
+                                                            <div className="space-y-3">
+                                                                {analysisDetails.engines.map((engine, idx) => (
+                                                                    <motion.div
+                                                                        key={idx}
+                                                                        initial={{ opacity: 0, x: -10 }}
+                                                                        animate={{ opacity: 1, x: 0 }}
+                                                                        transition={{ delay: idx * 0.05 }}
+                                                                        className="bg-background p-4 rounded-lg border border-border flex justify-between items-center hover:border-border/80 transition-colors"
+                                                                    >
+                                                                        <div className="flex items-center gap-3">
+                                                                            <div className={`p-2 rounded-lg ${engine.warning ? 'bg-yellow-500/10 text-yellow-500' : (engine.positives > 0 || engine.alert || engine.detected ? 'bg-red-500/10 text-red-500' : (isHeuristicThreat ? 'bg-gray-500/10 text-gray-500' : 'bg-green-500/10 text-green-500'))}`}>
+                                                                                {engine.warning ? <AlertTriangle className="w-5 h-5" /> : (engine.positives > 0 || engine.alert || engine.detected ? <AlertOctagon className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />)}
+                                                                            </div>
+                                                                            <div>
+                                                                                <h4 className="text-white font-bold text-sm">{engine.name}</h4>
+                                                                                <p className="text-xs text-gray-500">{engine.status_text || 'Análisis completado'}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                        <div className="text-right">
+                                                                            {engine.positives !== undefined ? (
+                                                                                <div className={`text-xs font-mono font-bold px-2 py-1 rounded ${engine.positives > 0 ? 'bg-red-500/10 text-red-400' : (isHeuristicThreat ? 'bg-gray-500/10 text-gray-400' : 'bg-green-500/10 text-green-400')}`}>
+                                                                                    {engine.positives} / {engine.total}
+                                                                                </div>
+                                                                            ) : (
+                                                                                <div className={`text-xs font-bold px-2 py-1 rounded ${engine.warning ? 'bg-yellow-500/10 text-yellow-400' : (engine.alert || engine.detected ? 'bg-red-500/10 text-red-400' : (isHeuristicThreat && engine.name !== 'Clasificador Heurístico' ? 'bg-gray-500/10 text-gray-400 italic' : 'bg-green-500/10 text-green-400'))}`}>
+                                                                                    {engine.warning ? 'PRECAUCIÓN' : (engine.alert || engine.detected ? 'DETECTADO' : 'LIMPIO')}
+                                                                                </div>
+                                                                            )}
+                                                                            {engine.link && engine.link !== '#' && !(incident.incident_type === 'url' && engine.name === 'MetaDefender') && (
+                                                                                <a href={engine.link} target="_blank" rel="noreferrer" className="text-primary hover:text-white text-xs mt-1 block transition-colors">
+                                                                                    Ver Reporte
+                                                                                </a>
+                                                                            )}
+                                                                        </div>
+                                                                    </motion.div>
+                                                                ))}
+                                                            </div>
+                                                        ) : (
+                                                            <div className="text-center py-8 text-gray-500 border border-dashed border-gray-700 rounded-lg">
+                                                                Sin datos de motores disponibles
                                                             </div>
                                                         )}
                                                     </div>
-                                                </div>
-
-                                                {/* Engines */}
-                                                <div className="bg-surface rounded-xl border border-border p-6">
-                                                    <div className="flex items-center justify-between mb-6">
-                                                        <h3 className="text-white font-bold flex items-center gap-2">
-                                                            <ShieldCheck className="w-5 h-5 text-primary" />
-                                                            Motores de Seguridad
-                                                        </h3>
-                                                        <span className="text-xs text-gray-500 font-bold bg-white/5 px-2 py-1 rounded">
-                                                            Resultados en Tiempo Real
-                                                        </span>
-                                                    </div>
-
-                                                    {analysisDetails.engines && analysisDetails.engines.length > 0 ? (
-                                                        <div className="space-y-3">
-                                                            {analysisDetails.engines.map((engine, idx) => (
-                                                                <motion.div
-                                                                    key={idx}
-                                                                    initial={{ opacity: 0, x: -10 }}
-                                                                    animate={{ opacity: 1, x: 0 }}
-                                                                    transition={{ delay: idx * 0.05 }}
-                                                                    className="bg-background p-4 rounded-lg border border-border flex justify-between items-center hover:border-border/80 transition-colors"
-                                                                >
-                                                                    <div className="flex items-center gap-3">
-                                                                        <div className={`p-2 rounded-lg ${engine.warning ? 'bg-yellow-500/10 text-yellow-500' : (engine.positives > 0 || engine.alert || engine.detected ? 'bg-red-500/10 text-red-500' : (isHeuristicThreat ? 'bg-gray-500/10 text-gray-500' : 'bg-green-500/10 text-green-500'))}`}>
-                                                                            {engine.warning ? <AlertTriangle className="w-5 h-5" /> : (engine.positives > 0 || engine.alert || engine.detected ? <AlertOctagon className="w-5 h-5" /> : <CheckCircle className="w-5 h-5" />)}
-                                                                        </div>
-                                                                        <div>
-                                                                            <h4 className="text-white font-bold text-sm">{engine.name}</h4>
-                                                                            <p className="text-xs text-gray-500">{engine.status_text || 'Análisis completado'}</p>
-                                                                        </div>
-                                                                    </div>
-                                                                    <div className="text-right">
-                                                                        {engine.positives !== undefined ? (
-                                                                            <div className={`text-xs font-mono font-bold px-2 py-1 rounded ${engine.positives > 0 ? 'bg-red-500/10 text-red-400' : (isHeuristicThreat ? 'bg-gray-500/10 text-gray-400' : 'bg-green-500/10 text-green-400')}`}>
-                                                                                {engine.positives} / {engine.total}
-                                                                            </div>
-                                                                        ) : (
-                                                                            <div className={`text-xs font-bold px-2 py-1 rounded ${engine.warning ? 'bg-yellow-500/10 text-yellow-400' : (engine.alert || engine.detected ? 'bg-red-500/10 text-red-400' : (isHeuristicThreat && engine.name !== 'Clasificador Heurístico' ? 'bg-gray-500/10 text-gray-400 italic' : 'bg-green-500/10 text-green-400'))}`}>
-                                                                                {engine.warning ? 'PRECAUCIÓN' : (engine.alert || engine.detected ? 'DETECTADO' : 'LIMPIO')}
-                                                                            </div>
-                                                                        )}
-                                                                        {engine.link && engine.link !== '#' && !(incident.incident_type === 'url' && engine.name === 'MetaDefender') && (
-                                                                            <a href={engine.link} target="_blank" rel="noreferrer" className="text-primary hover:text-white text-xs mt-1 block transition-colors">
-                                                                                Ver Reporte
-                                                                            </a>
-                                                                        )}
-                                                                    </div>
-                                                                </motion.div>
-                                                            ))}
-                                                        </div>
-                                                    ) : (
-                                                        <div className="text-center py-8 text-gray-500 border border-dashed border-gray-700 rounded-lg">
-                                                            Sin datos de motores disponibles
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </>
-                                        );
-                                    })()
-                                ) : (
-                                    <div className="p-8 text-center bg-red-500/10 border border-red-500/20 rounded-xl">
-                                        <p className="text-red-400 font-bold">Error al cargar datos</p>
-                                    </div>
-                                )}
-                            </motion.div>
-                        )}
-
-                        {/* TAB: NOTES */}
-                        {activeTab === 'notes' && (
-                            <motion.div
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                className="flex flex-col h-full"
-                            >
-                                <div className="flex-1 overflow-y-auto pr-2 space-y-4 mb-4 custom-scrollbar max-h-[400px]">
-                                    {loadingNotes ? (
-                                        <div className="text-center py-8 text-gray-500"><Activity className="w-6 h-6 animate-spin mx-auto mb-2" />Cargando notas...</div>
-                                    ) : notes.length === 0 ? (
-                                        <div className="text-center py-12 border border-dashed border-border rounded-xl">
-                                            <MessageSquare className="w-8 h-8 text-gray-600 mx-auto mb-2" />
-                                            <p className="text-gray-400 mb-1">No hay notas registradas</p>
-                                            <p className="text-gray-500 text-xs">Agrega una nota para iniciar el historial.</p>
-                                        </div>
+                                                </>
+                                            );
+                                        })()
                                     ) : (
-                                        notes.map((note, idx) => (
-                                            <div key={note.id} className="bg-surface p-4 rounded-xl border border-border">
-                                                <div className="flex justify-between items-center mb-2">
-                                                    <div className="flex items-center gap-2">
-                                                        <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold uppercase">
-                                                            {note.author_username.charAt(0)}
-                                                        </div>
-                                                        <span className="text-primary font-bold text-sm">{note.author_username}</span>
-                                                    </div>
-                                                    <span className="text-gray-500 text-xs font-mono">{new Date(note.created_at).toLocaleString()}</span>
-                                                </div>
-                                                <p className="text-gray-300 text-sm leading-relaxed pl-8 border-l-2 border-border">
-                                                    {note.content}
-                                                </p>
-                                            </div>
-                                        ))
+                                        <div className="p-8 text-center bg-red-500/10 border border-red-500/20 rounded-xl">
+                                            <p className="text-red-400 font-bold">Error al cargar datos</p>
+                                        </div>
                                     )}
-                                </div>
-                                <div className="bg-surface p-4 rounded-xl border border-border">
-                                    <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Nueva Nota</label>
-                                    <textarea
-                                        className="w-full bg-background text-white rounded-lg p-3 text-sm border border-border focus:ring-1 focus:ring-primary outline-none transition-all resize-none"
-                                        rows="3"
-                                        placeholder="Escriba detalles, observaciones o acciones tomadas..."
-                                        value={newNote}
-                                        onChange={(e) => setNewNote(e.target.value)}
-                                    />
-                                    <div className="flex justify-end mt-3">
-                                        <button
-                                            className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
-                                            onClick={handleAddNote}
-                                            disabled={!newNote.trim()}
-                                        >
-                                            Guardar Nota
-                                        </button>
+                                </motion.div>
+                            )}
+
+                            {/* TAB: NOTES */}
+                            {activeTab === 'notes' && (
+                                <motion.div
+                                    key="notes"
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -10 }}
+                                    transition={{ duration: 0.2 }}
+                                    className="flex flex-col h-full"
+                                >
+                                    <div className="flex-1 overflow-y-auto pr-2 space-y-4 mb-4 custom-scrollbar max-h-[400px]">
+                                        {loadingNotes ? (
+                                            <div className="text-center py-8 text-gray-500"><Activity className="w-6 h-6 animate-spin mx-auto mb-2" />Cargando notas...</div>
+                                        ) : notes.length === 0 ? (
+                                            <div className="text-center py-12 border border-dashed border-border rounded-xl">
+                                                <MessageSquare className="w-8 h-8 text-gray-600 mx-auto mb-2" />
+                                                <p className="text-gray-400 mb-1">No hay notas registradas</p>
+                                                <p className="text-gray-500 text-xs">Agrega una nota para iniciar el historial.</p>
+                                            </div>
+                                        ) : (
+                                            notes.map((note, idx) => (
+                                                <div key={note.id} className="bg-surface p-4 rounded-xl border border-border">
+                                                    <div className="flex justify-between items-center mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold uppercase">
+                                                                {note.author_username.charAt(0)}
+                                                            </div>
+                                                            <span className="text-primary font-bold text-sm">{note.author_username}</span>
+                                                        </div>
+                                                        <span className="text-gray-500 text-xs font-mono">{new Date(note.created_at).toLocaleString()}</span>
+                                                    </div>
+                                                    <p className="text-gray-300 text-sm leading-relaxed pl-8 border-l-2 border-border">
+                                                        {note.content}
+                                                    </p>
+                                                </div>
+                                            ))
+                                        )}
                                     </div>
-                                </div>
-                            </motion.div>
-                        )}
+                                    <div className="bg-surface p-4 rounded-xl border border-border">
+                                        <label className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 block">Nueva Nota</label>
+                                        <textarea
+                                            className="w-full bg-background text-white rounded-lg p-3 text-sm border border-border focus:ring-1 focus:ring-primary outline-none transition-all resize-none"
+                                            rows="3"
+                                            placeholder="Escriba detalles, observaciones o acciones tomadas..."
+                                            value={newNote}
+                                            onChange={(e) => setNewNote(e.target.value)}
+                                        />
+                                        <div className="flex justify-end mt-3">
+                                            <button
+                                                className="bg-primary hover:bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium transition-colors shadow-lg shadow-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                onClick={handleAddNote}
+                                                disabled={!newNote.trim()}
+                                            >
+                                                Guardar Nota
+                                            </button>
+                                        </div>
+                                    </div>
+                                </motion.div>
+                            )}
+                        </AnimatePresence>
                     </div>
                 </motion.div>
             </div>

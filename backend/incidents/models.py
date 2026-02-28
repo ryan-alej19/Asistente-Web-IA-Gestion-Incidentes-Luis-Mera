@@ -21,6 +21,7 @@ class Incident(models.Model):
     TYPE_CHOICES = [
         ('url', 'URL'),
         ('file', 'Archivo'),
+        ('image', 'Imagen'),
     ]
     
     # Informacion basica

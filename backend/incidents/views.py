@@ -203,9 +203,6 @@ def analyze_file_preview(request):
             # Solo sumamos maximos si fuera logica estricta, pero sumamos detecciones para el score simple
             total_positives += md_result['positives']
             total_engines += md_result['total']
-            
-        # 3. Heurístico
-        # 3. Heurístico
         if heuristic_result['heuristic_alert']:
             engines.append({
                 'name': 'Clasificador Heurístico',
@@ -479,6 +476,181 @@ def analyze_url_preview(request):
 
     except Exception as e:
         logger.error(f"Error CRITICO en analisis URL: {e}")
+        return Response({'error': str(e)}, status=500)
+
+@csrf_exempt
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def analyze_image_preview(request):
+    analysis_start = time.time()
+    perf_log.info(f"[ANALISIS INICIO] Tipo: IMAGEN | Usuario: {request.user.username}")
+    
+    if request.method != 'POST':
+        return Response({'error': 'Método no permitido'}, status=405)
+    
+    file_obj = request.FILES.get('file')
+    if not file_obj:
+        return Response({'error': 'No se proporcionó imagen'}, status=400)
+    
+    try:
+        # Leer contenido de la imagen
+        file_content = file_obj.read()
+        
+        # Calcular hash SHA256 para cache
+        import hashlib
+        file_hash = hashlib.sha256(file_content).hexdigest()
+        
+        # Cache Key (24 Horas)
+        cache_key = f"image_analysis_{file_hash}"
+        
+        from django.core.cache import cache
+        cached_result = cache.get(cache_key)
+        if cached_result:
+            logger.info(f"Resultado en caché encontrado para Imagen: {file_hash}")
+            return Response(cached_result)
+            
+        logger.info(f"Analizando imagen nueva (Hash: {file_hash})")
+        
+        # Instanciar y llamar a Gemini (Unico motor para imágenes)
+        gemini_service = GeminiService()
+        
+        mime_type = "image/jpeg"
+        if file_obj.name.lower().endswith('.png'):
+            mime_type = "image/png"
+            
+        gemini_result = gemini_service.analyze_image(file_content, mime_type=mime_type)
+        
+        # Determinar nivel de riesgo desde el json de Gemini
+        gemini_risk = gemini_result.get('riesgo', 'MEDIO').upper()
+        
+        # Mapear al estándar del frontend
+        if gemini_risk in ['CRÍTICO', 'CRITICO']:
+            risk = 'CRITICAL'
+            message = 'Captura Maliciosa (Phishing/Estafa)'
+        elif gemini_risk == 'ALTO':
+            risk = 'HIGH'
+            message = 'Captura Sospechosa'
+        elif gemini_risk == 'MEDIO':
+            risk = 'MEDIUM'
+            message = 'Posible Riesgo'
+        elif gemini_risk == 'BAJO':
+            risk = 'LOW'
+            message = 'Riesgo Mínimo'
+        else:
+            risk = 'SAFE'
+            message = 'Captura Segura'
+            
+        engines_list = [{
+            'name': 'Inteligencia Artificial (Gemini Vision)',
+            'detected': risk in ['CRITICAL', 'HIGH'],
+            'status_text': gemini_risk,
+            'link': '#'
+        }]
+        
+        total_scanned = 1
+        positives = 1 if risk in ['CRITICAL', 'HIGH'] else 0
+        
+        urls_extraidas = gemini_result.get('urls_extraidas', [])
+        if urls_extraidas and isinstance(urls_extraidas, list) and len(urls_extraidas) > 0:
+            url_to_scan = urls_extraidas[0]
+            logger.info(f"Haciendo OCR SCAN a URL extraída: {url_to_scan}")
+            
+            # Importar e Instanciar
+            from services.google_safe_browsing_service import GoogleSafeBrowsingService
+            from services.virustotal_service import VirusTotalService
+            from services.metadefender_service import MetaDefenderService
+            vt_service = VirusTotalService()
+            md_service = MetaDefenderService()
+            gsb_service = GoogleSafeBrowsingService()
+            
+            import concurrent.futures
+            max_engine_positives = 0
+            
+            with concurrent.futures.ThreadPoolExecutor(max_workers=3) as executor:
+                future_vt = executor.submit(vt_service.analyze_url, url_to_scan)
+                future_md = executor.submit(md_service.analyze_url, url_to_scan)
+                future_gsb = executor.submit(gsb_service.check_url, url_to_scan)
+            
+                try:
+                    vt_res = future_vt.result(timeout=10)
+                    if 'positives' in vt_res:
+                        pos = vt_res.get('positives', 0)
+                        tot = vt_res.get('total', 0)
+                        engines_list.append({
+                            'name': 'VirusTotal',
+                            'positives': pos,
+                            'total': tot,
+                            'detected': pos > 0,
+                            'link': vt_res.get('link', '#')
+                        })
+                        if pos > max_engine_positives: max_engine_positives = pos
+                        total_scanned += tot
+                        if pos > 0: positives += pos
+                except Exception as e:
+                    logger.warning(f"Error OCR VirusTotal: {e}")
+                    
+                try:
+                    md_res = future_md.result(timeout=10)
+                    if 'positives' in md_res:
+                        pos = md_res.get('positives', 0)
+                        tot = md_res.get('total', 0)
+                        engines_list.append({
+                            'name': 'MetaDefender',
+                            'positives': pos,
+                            'total': tot,
+                            'detected': pos > 0,
+                            'link': md_res.get('link', '#')
+                        })
+                        if pos > max_engine_positives: max_engine_positives = max(max_engine_positives, pos)
+                        total_scanned += tot
+                        if pos > 0: positives += pos
+                except Exception as e:
+                    logger.warning(f"Error OCR MetaDefender: {e}")
+                    
+                try:
+                    gsb_res = future_gsb.result(timeout=10)
+                    is_safe = gsb_res.get('safe', True)
+                    is_warning = gsb_res.get('warning', False)
+                    
+                    engines_list.append({
+                        'name': 'Google Safe Browsing',
+                        'detected': not is_safe and not is_warning,
+                        'warning': is_warning,
+                        'status_text': 'Precaución' if is_warning else ('Seguro' if is_safe else 'Peligroso'),
+                        'link': f"https://transparencyreport.google.com/safe-browsing/search?url={url_to_scan}"
+                    })
+                    if not is_safe and not is_warning:
+                        positives += 1
+                        max_engine_positives = max(max_engine_positives, 1)
+                except Exception as e:
+                    logger.warning(f"Error OCR GSB: {e}")
+                    
+            # Si motores tradicionales hallaron algo certero, escalar el riesgo
+            if max_engine_positives > 0:
+                risk = 'CRITICAL'
+                message = 'Malware o Phishing Confirmado (Basado en OCR)'
+        
+        final_response = {
+            'risk_level': risk,
+            'message': message,
+            'detail': gemini_result.get('explicacion', 'Análisis completado mediante Inteligencia Artificial.'),
+            'gemini_explanation': gemini_result.get('explicacion', ''),
+            'gemini_recommendation': gemini_result.get('recomendacion', ''),
+            'engines': engines_list,
+            'total_engines': total_scanned,
+            'positives': positives
+        }
+        
+        # Guardar en Cache
+        cache.set(cache_key, final_response, 86400) # 24 hrs
+        
+        analysis_end = time.time()
+        perf_log.info(f"[ANALISIS FIN] ID: {file_hash} | T. Total: {analysis_end - analysis_start:.2f}s")
+        
+        return Response(final_response)
+
+    except Exception as e:
+        logger.error(f"Error procesando vista de imagen: {e}", exc_info=True)
         return Response({'error': str(e)}, status=500)
 
 @api_view(['POST'])
@@ -1123,7 +1295,7 @@ def export_incidents_csv(request):
         # HEADER (Una sola vez)
         writer.writerow([
             'ID', 'Fecha Creacion', 'Usuario', 'Tipo', 'Objetivo', 
-            'Estado', 'Riesgo', 'VT Detecciones', 'IA Recomendacion'
+            'Estado', 'Riesgo', 'VT Detecciones', 'IA Recomendacion', 'OCR URLs Extraídas'
         ])
         
         for inc in incidents:
@@ -1137,8 +1309,12 @@ def export_incidents_csv(request):
                          vt_score = f"{vt.get('positives',0)}/{vt.get('total',0)}"
             
             gemini_rec = ""
+            ocr_urls = ""
             if inc.analysis_result and isinstance(inc.analysis_result, dict):
                 gemini_rec = inc.analysis_result.get('gemini_recomendacion', '')
+                urls_list = inc.analysis_result.get('urls_extraidas', [])
+                if isinstance(urls_list, list) and len(urls_list) > 0:
+                    ocr_urls = ", ".join(urls_list)
             
             # Limpieza de texto para evitar roturas de CSV
             desc = (inc.description or "").replace(';', ',').replace('\n', ' ')
@@ -1153,7 +1329,8 @@ def export_incidents_csv(request):
                 inc.status,
                 inc.risk_level,
                 vt_score,
-                gemini_rec
+                gemini_rec,
+                ocr_urls
             ])
             
         return response
@@ -1241,6 +1418,22 @@ def generate_pdf_report(request, incident_id=None):
             p.drawString(40, y, f"Objetivo: {target}")
             y -= 30
 
+            # Incrustar la imagen en el reporte PDF
+            if incident.incident_type == 'image' and incident.attached_file:
+                try:
+                    img_path = incident.attached_file.path
+                    if os.path.exists(img_path):
+                        # Si no hay espacio suficiente en la página, salto de página
+                        if y < 250:
+                            p.showPage()
+                            y = h - 50
+                        
+                        # Dibujar imagen manteniendo proporción (ancho max 400, alto max 180)
+                        p.drawImage(img_path, 40, y - 200, width=400, height=180, preserveAspectRatio=True, mask='auto')
+                        y -= 220
+                except Exception as e:
+                    logger.warning(f"Error incrustando imagen en PDF: {e}")
+
             # 4. Analisis
             p.setFillColor(colors.lightgrey)
             p.rect(40, y - 5, 530, 20, fill=1, stroke=0)
@@ -1287,7 +1480,8 @@ def generate_pdf_report(request, incident_id=None):
         else:
             # --- MONTHLY REPORT ---
             now = timezone.localtime(timezone.now())
-            incidents_qs = Incident.objects.all().order_by('-created_at')
+            # Ordenar por fecha de creación ascendente (más antiguos primero a más recientes)
+            incidents_qs = Incident.objects.all().order_by('created_at')
 
             # Logo
             if os.path.exists(logo_path):
@@ -1297,7 +1491,7 @@ def generate_pdf_report(request, incident_id=None):
                     logger.warning(f"Error drawing monthly logo: {e}")
 
             p.setFont("Helvetica-Bold", 16)
-            p.drawRightString(550, h - 50, "REPORTE MENSUAL DE INCIDENTES")
+            p.drawRightString(550, h - 50, "REPORTE GENERAL DE INCIDENTES - v1.3.0")
             p.setFont("Helvetica-Bold", 12)
             p.drawRightString(550, h - 70, f"Fecha Emisión: {now.strftime('%Y-%m-%d')}")
             
@@ -1307,48 +1501,61 @@ def generate_pdf_report(request, incident_id=None):
             
             y = h - 130
             
-            # Table Header Background
-            p.setFillColor(colors.lightgrey)
-            p.rect(40, y - 5, 530, 15, fill=1, stroke=0)
-            p.setFillColor(colors.black)
+            def draw_table_header(canvas_obj, y_pos):
+                canvas_obj.setFillColor(colors.lightgrey)
+                canvas_obj.rect(40, y_pos - 6, 530, 20, fill=1, stroke=0)
+                canvas_obj.setFillColor(colors.black)
+                canvas_obj.setFont("Helvetica-Bold", 10)
+                canvas_obj.drawString(45, y_pos, "ID")
+                canvas_obj.drawString(85, y_pos, "FECHA")
+                canvas_obj.drawString(185, y_pos, "USUARIO")
+                canvas_obj.drawString(285, y_pos, "TIPO")
+                canvas_obj.drawString(365, y_pos, "RIESGO")
+                canvas_obj.drawString(465, y_pos, "ESTADO")
+                return y_pos - 20
 
-            # Simple Table Header
-            p.setFont("Helvetica-Bold", 9)
-            p.drawString(45, y, "ID")
-            p.drawString(85, y, "FECHA")
-            p.drawString(185, y, "USUARIO")
-            p.drawString(285, y, "TIPO")
-            p.drawString(355, y, "RIESGO")
-            p.drawString(455, y, "ESTADO")
-            y -= 20
+            y = draw_table_header(p, y)
             
-            p.setFont("Helvetica", 8)
-            for inc in incidents_qs:
+            p.setFont("Helvetica", 10)
+            for i, inc in enumerate(incidents_qs):
                 if y < 50:
                     p.showPage()
                     y = h - 50
-                    # Re-draw header on new page? (Optional-skipped for simplicity)
+                    y = draw_table_header(p, y)
+                    p.setFont("Helvetica", 10)
                 
-                # Stripe rows?
-                # if inc.id % 2 == 0: p.setFillColor(colors.whitesmoke) ...
-
+                # Alternate row background
+                if i % 2 == 0:
+                    p.setFillColor(colors.whitesmoke)
+                    p.rect(40, y - 6, 530, 20, fill=1, stroke=0)
+                
+                p.setFillColor(colors.black)
+                
                 p.drawString(45, y, str(inc.id))
-                p.drawString(85, y, timezone.localtime(inc.created_at).strftime('%Y-%m-%d'))
+                p.drawString(85, y, timezone.localtime(inc.created_at).strftime('%Y-%m-%d %H:%M'))
                 p.drawString(185, y, inc.reported_by.username[:15])
                 p.drawString(285, y, inc.incident_type)
                 
-                # Colorize Risk?
+                # Colorize Risk
                 risk = inc.risk_level.upper()
                 if risk in ['CRITICAL', 'HIGH']: p.setFillColor(colors.red)
                 elif risk == 'MEDIUM': p.setFillColor(colors.orange)
                 elif risk == 'SAFE': p.setFillColor(colors.green)
                 else: p.setFillColor(colors.black)
                 
-                p.drawString(355, y, risk)
+                p.drawString(365, y, risk)
                 p.setFillColor(colors.black) # Reset
                 
-                p.drawString(455, y, inc.status)
-                y -= 15
+                # Translate Status
+                status = inc.status.upper()
+                if status == 'PENDING': status_text = 'PENDIENTE'
+                elif status == 'INVESTIGATING': status_text = 'EN REVISIÓN'
+                elif status == 'RESOLVED': status_text = 'RESUELTO'
+                else: status_text = status
+                
+                p.drawString(465, y, status_text)
+                
+                y -= 20
 
             p.showPage()
 

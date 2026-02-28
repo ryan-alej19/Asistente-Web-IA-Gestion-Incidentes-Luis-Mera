@@ -101,7 +101,7 @@ Responde ÚNICAMENTE con el objeto JSON válido."""
                 logger.error(f"[GEMINI] Error JSON: {e} - Texo recibido: {text[:50]}...")
                 # Intento de corrección simple (si faltan llaves)
                 if '{' in text and '}' not in text:
-                    text += '}"}' # Intento desesperado de cerrar
+                    text += '"}' # Intento desesperado de cerrar el string y el JSON
                     try: result = json.loads(text)
                     except: return self._fallback_explanation(positives, total, incident_type)
                 else:
@@ -147,4 +147,84 @@ Responde ÚNICAMENTE con el objeto JSON válido."""
             return {
                 'explicacion': f'{item_name.capitalize()} fue revisado por {total} empresas de seguridad y ninguna encontro amenazas.',
                 'recomendacion': f'Es seguro {action_name}.'
+            }
+
+    def analyze_image(self, file_bytes, mime_type="image/jpeg"):
+        if not self.available:
+            return {
+                "explicacion": "Análisis inteligente no disponible por falta de API Key.",
+                "recomendacion": "Por favor revisa la imagen manualmente."
+            }
+            
+        import base64
+        encoded_image = base64.b64encode(file_bytes).decode('utf-8')
+
+        prompt = """Actúa como un Analista de Ciberseguridad Experto especializado en visión artificial y OCR. Analiza la siguiente captura de pantalla o imagen proporcionada por un empleado.
+
+OBJETIVO:
+El usuario ha subido esta imagen porque sospecha que podría ser un intento de ciberataque, phishing, estafa, extorsión, o malware.
+
+INSTRUCCIONES DE ANÁLISIS:
+1. Inspecciona la imagen detenidamente en busca de señales de fraude (ej: correos falsos simulando ser un banco, mensajes de WhatsApp sospechosos, ventanas emergentes de "virus detectado", enlaces extraños, faltas de ortografía, urgencia o amenazas).
+2. EXTRAE TEXTO (OCR): Si logras leer alguna URL, dominio web, o enlace dentro de la imagen (ejemplo: 'http://hacker.com', 'banco-falso.net', 'bit.ly/123'), extráelo y colócalo en el arreglo 'urls_extraidas'. Si no hay ninguna URL visible, devuelve un arreglo vacío [].
+3. Si la imagen NO contiene nada sospechoso y es completamente inofensiva (ejemplo: la foto de un perrito, un paisaje, un documento normal), clasifícala como "SEGURO" e indícale al usuario de forma clara pero profesional qué es lo que ves en la imagen para tranquilizarlo.
+4. ESTRICTAMENTE define el Nivel de Riesgo usando exactamente una de estas palabras: CRÍTICO, ALTO, MEDIO, BAJO, o SEGURO.
+
+FORMATO DE RESPUESTA (JSON PURO):
+{
+    "riesgo": "Nivel detectado (CRÍTICO, ALTO, MEDIO, BAJO, o SEGURO)",
+    "explicacion": "Análisis profesional del contenido de la imagen (2-3 frases), justificando por qué es peligroso o inofensivo. Si es algo normal como un perro o paisaje, menciónalo.",
+    "recomendacion": "Acción inmediata recomendada.",
+    "urls_extraidas": ["ejemplo.com", "http://malicioso.net/login"]
+}
+
+Responde ÚNICAMENTE con el objeto JSON válido, sin bloques de código ni texto adicional."""
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={self.api_key}"
+            
+        payload = {
+            "contents": [{
+                "parts": [
+                    {"text": prompt},
+                    {
+                        "inline_data": {
+                            "mime_type": mime_type,
+                            "data": encoded_image
+                        }
+                    }
+                ]
+            }],
+            "generationConfig": {
+                "temperature": 0.4,
+                "maxOutputTokens": 2048
+            }
+        }
+            
+        try:
+            response = requests.post(url, json=payload, timeout=45)
+            
+            if response.status_code != 200:
+                logger.error(f"Error en API de Gemini Imagen: {response.status_code} - {response.text}")
+                return {
+                    "riesgo": "MEDIO",
+                    "explicacion": "El motor de Inteligencia Artificial falló al analizar la imagen.",
+                    "recomendacion": "Por favor revisar manualmente."
+                }
+            
+            data = response.json()
+            text = data['candidates'][0]['content']['parts'][0]['text'].strip()
+            
+            # Limpiar markdown
+            text = text.replace('```json', '').replace('```', '').strip()
+            if text.startswith('json'):
+                text = text[4:].strip()
+            
+            return json.loads(text)
+            
+        except Exception as e:
+            logger.error(f"Error procesando imagen con Gemini: {e}")
+            return {
+                "riesgo": "MEDIO",
+                "explicacion": "Ocurrió un error inesperado al procesar la imagen con el servicio de Inteligencia Artificial.",
+                "recomendacion": "Contactar a soporte técnico o revisar manualmente."
             }

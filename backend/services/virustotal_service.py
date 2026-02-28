@@ -132,6 +132,7 @@ class VirusTotalService:
                     'total': report_data.get('total', 0),
                     'permalink': report_data.get('permalink', ''),
                     'scan_date': report_data.get('scan_date', ''),
+                    'link': report_data.get('permalink', ''),
                 }
             
             # Si no existe, subir archivo
